@@ -27,5 +27,9 @@ jobs:
     - name: Build
       run: go build -v .
 
+
     - name: Test
-      run: go test -timeout 30s ./...
+      run: |
+        docker run -d -p 9000:9000 -e "MINIO_ACCESS_KEY=9PWM3PGAOU5TESTINGKEY" -e "MINIO_SECRET_KEY=p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY" minio/minio server /data
+        go test -timeout 30s ./...
+
