@@ -79,7 +79,7 @@ func getTestProbe() (Probe, error) {
 	endpoint := getEnv("S3_ENDPOINT", "localhost:9000")
 	accessKey := getEnv("S3_ACCESS_KEY", "9PWM3PGAOU5TESTINGKEY")
 	secretKey := getEnv("S3_SECRET_KEY", "p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY")
-	probe, err := NewProbe(endpoint, "", accessKey, secretKey, "monitoring-test-", 300, make(chan bool, 1))
+	probe, err := NewProbe(endpoint, "", accessKey, secretKey, "monitoring-latency-test-", "monitoring-durab-test-", 300, make(chan bool, 1))
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}

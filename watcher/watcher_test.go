@@ -10,7 +10,7 @@ import (
 func TestNewWrapperCreatesWrapper(t *testing.T) {
 	addr := "localhost:9999"
 	tag := "randomTag"
-	w := NewWatcher(addr, tag, "", "", "", "", 120)
+	w := NewWatcher(addr, tag, "", "", "", "", "", 120)
 	if w.consulTag != tag {
 		t.Errorf("Constructor doesn't set tag properly")
 	}

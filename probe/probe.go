@@ -32,18 +32,19 @@ const millisecondInMinute = 60_000
 
 // Probe is a S3 probe
 type Probe struct {
-	name              string
-	endpoint          string
-	secretKey         string
-	accessKey         string
-	latencyBucketName string
-	probeRatePerMin   int
-	s3Client          *minio.Client
-	controlChan       chan bool
+	name                 string
+	endpoint             string
+	secretKey            string
+	accessKey            string
+	latencyBucketName    string
+	durabilityBucketName string
+	probeRatePerMin      int
+	s3Client             *minio.Client
+	controlChan          chan bool
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, probeRatePerMin int, controlChan chan bool) (Probe, error) {
+func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, durabilityBucketName string, probeRatePerMin int, controlChan chan bool) (Probe, error) {
 	endpoint := name + suffix
 	minioClient, err := minio.New(endpoint, accessKey, secretKey, false)
 	if err != nil {
@@ -52,14 +53,15 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 
 	log.Println("Probe created for:", endpoint)
 	return Probe{
-		name:              name,
-		endpoint:          endpoint,
-		secretKey:         secretKey,
-		accessKey:         accessKey,
-		latencyBucketName: latencyBucketName,
-		probeRatePerMin:   probeRatePerMin,
-		controlChan:       controlChan,
-		s3Client:          minioClient,
+		name:                 name,
+		endpoint:             endpoint,
+		secretKey:            secretKey,
+		accessKey:            accessKey,
+		latencyBucketName:    latencyBucketName,
+		durabilityBucketName: durabilityBucketName,
+		probeRatePerMin:      probeRatePerMin,
+		controlChan:          controlChan,
+		s3Client:             minioClient,
 	}, nil
 }
 
