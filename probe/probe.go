@@ -150,6 +150,17 @@ func (p *Probe) prepareBucket() error {
 		return nil
 	}
 	err := p.s3Client.MakeBucket(p.bucketName, "")
+	lifecycle1d := `<LifecycleConfiguration>
+		<Rule>
+			<ID>expire-bucket</ID>
+			<Prefix></Prefix>
+			<Status>Enabled</Status>
+			<Expiration>
+				<Days>1</Days>
+			</Expiration>
+		</Rule>
+	</LifecycleConfiguration>`
+	p.s3Client.SetBucketLifecycle(p.bucketName, lifecycle1d)
 	if err != nil {
 		return err
 	}
