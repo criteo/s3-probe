@@ -32,18 +32,18 @@ const millisecondInMinute = 60_000
 
 // Probe is a S3 probe
 type Probe struct {
-	name            string
-	endpoint        string
-	secretKey       string
-	accessKey       string
-	bucketName      string
-	probeRatePerMin int
-	s3Client        *minio.Client
-	controlChan     chan bool
+	name              string
+	endpoint          string
+	secretKey         string
+	accessKey         string
+	latencyBucketName string
+	probeRatePerMin   int
+	s3Client          *minio.Client
+	controlChan       chan bool
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(name string, suffix string, accessKey string, secretKey string, bucketName string, probeRatePerMin int, controlChan chan bool) (Probe, error) {
+func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, probeRatePerMin int, controlChan chan bool) (Probe, error) {
 	endpoint := name + suffix
 	minioClient, err := minio.New(endpoint, accessKey, secretKey, false)
 	if err != nil {
@@ -52,14 +52,14 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, bu
 
 	log.Println("Probe created for:", endpoint)
 	return Probe{
-		name:            name,
-		endpoint:        endpoint,
-		secretKey:       secretKey,
-		accessKey:       accessKey,
-		bucketName:      bucketName,
-		probeRatePerMin: probeRatePerMin,
-		controlChan:     controlChan,
-		s3Client:        minioClient,
+		name:              name,
+		endpoint:          endpoint,
+		secretKey:         secretKey,
+		accessKey:         accessKey,
+		latencyBucketName: latencyBucketName,
+		probeRatePerMin:   probeRatePerMin,
+		controlChan:       controlChan,
+		s3Client:          minioClient,
 	}, nil
 }
 
@@ -100,7 +100,7 @@ func (p *Probe) performCheck() error {
 
 	objectData, _ := randomObject(objectSize)
 	operation = func() error {
-		_, err := p.s3Client.PutObject(p.bucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+		_, err := p.s3Client.PutObject(p.latencyBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("put_object", operation); err != nil {
@@ -108,7 +108,7 @@ func (p *Probe) performCheck() error {
 	}
 
 	operation = func() error {
-		_, err := p.s3Client.GetObject(p.bucketName, objectName, minio.GetObjectOptions{})
+		_, err := p.s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("get_object", operation); err != nil {
@@ -116,7 +116,7 @@ func (p *Probe) performCheck() error {
 	}
 
 	operation = func() error {
-		err := p.s3Client.RemoveObject(p.bucketName, objectName)
+		err := p.s3Client.RemoveObject(p.latencyBucketName, objectName)
 		return err
 	}
 	if err := p.mesureOperation("remove_object", operation); err != nil {
@@ -142,14 +142,14 @@ func (p *Probe) mesureOperation(operationName string, operation func() error) er
 }
 
 func (p *Probe) prepareBucket() error {
-	exists, errBucketExists := p.s3Client.BucketExists(p.bucketName)
+	exists, errBucketExists := p.s3Client.BucketExists(p.latencyBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
 	}
 	if exists {
 		return nil
 	}
-	err := p.s3Client.MakeBucket(p.bucketName, "")
+	err := p.s3Client.MakeBucket(p.latencyBucketName, "")
 	lifecycle1d := `<LifecycleConfiguration>
 		<Rule>
 			<ID>expire-bucket</ID>
@@ -160,7 +160,7 @@ func (p *Probe) prepareBucket() error {
 			</Expiration>
 		</Rule>
 	</LifecycleConfiguration>`
-	p.s3Client.SetBucketLifecycle(p.bucketName, lifecycle1d)
+	p.s3Client.SetBucketLifecycle(p.latencyBucketName, lifecycle1d)
 	if err != nil {
 		return err
 	}

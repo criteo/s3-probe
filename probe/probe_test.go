@@ -11,13 +11,13 @@ import (
 func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
-	probe.bucketName = probe.bucketName + suffix
+	probe.latencyBucketName = probe.latencyBucketName + suffix
 	err := probe.prepareBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
 
-	exists, _ := probe.s3Client.BucketExists(probe.bucketName)
+	exists, _ := probe.s3Client.BucketExists(probe.latencyBucketName)
 	if !exists {
 		t.Errorf("Bucket preparation failed")
 	}
@@ -34,7 +34,7 @@ func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 	probe.s3Client = client
 
 	suffix, _ := randomHex(8)
-	probe.bucketName = probe.bucketName + suffix
+	probe.latencyBucketName = probe.latencyBucketName + suffix
 	err := probe.prepareBucket()
 	if err == nil {
 		t.Errorf("Bucket Creation client's errors are not properly handled")
@@ -44,7 +44,7 @@ func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 func TestperformCheckSuccess(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
-	probe.bucketName = probe.bucketName + suffix
+	probe.latencyBucketName = probe.latencyBucketName + suffix
 	err := probe.prepareBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
@@ -58,13 +58,13 @@ func TestperformCheckSuccess(t *testing.T) {
 func TestStartProbingProperlyTerminate(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
-	bucket := probe.bucketName
-	probe.bucketName = "/./??.."
+	bucket := probe.latencyBucketName
+	probe.latencyBucketName = "/./??.."
 	err := probe.StartProbing()
 	if err == nil {
 		t.Errorf("Preparation errors are not properly handled: %s", err)
 	}
-	probe.bucketName = bucket + suffix
+	probe.latencyBucketName = bucket + suffix
 	controlChan := probe.controlChan
 
 	controlChan <- false
