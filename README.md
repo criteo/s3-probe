@@ -5,7 +5,7 @@
 # Docker build
 
 ```bash
-docker build . -t mesos-registry.par.preprod.crto.in/criteo/s3-probe
+docker build . s3-probe
 ```
 
 #  Testing
