@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"review.criteois.lan/s3-probe/watcher"
+	"github.com/s3-probe/watcher"
 )
 
 func main() {

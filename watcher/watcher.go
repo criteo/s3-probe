@@ -4,7 +4,7 @@ import (
 	"log"
 	"time"
 
-	"review.criteois.lan/s3-probe/probe"
+	"github.com/s3-probe/probe"
 
 	consul_api "github.com/hashicorp/consul/api"
 )

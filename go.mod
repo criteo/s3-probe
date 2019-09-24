@@ -1,4 +1,4 @@
-module review.criteois.lan/s3-probe
+module github.com/s3-probe
 
 go 1.13
 
