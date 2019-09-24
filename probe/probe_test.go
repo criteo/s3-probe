@@ -12,7 +12,7 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
-	err := probe.prepareBucket()
+	err := probe.prepareLatencyBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
@@ -22,7 +22,7 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 		t.Errorf("Bucket preparation failed")
 	}
 
-	err = probe.prepareBucket()
+	err = probe.prepareLatencyBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
@@ -35,7 +35,7 @@ func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
-	err := probe.prepareBucket()
+	err := probe.prepareLatencyBucket()
 	if err == nil {
 		t.Errorf("Bucket Creation client's errors are not properly handled")
 	}
@@ -45,11 +45,11 @@ func TestperformCheckSuccess(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
-	err := probe.prepareBucket()
+	err := probe.prepareLatencyBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
-	err = probe.performCheck()
+	err = probe.performLatencyChecks()
 	if err != nil {
 		t.Errorf("Probe check is failing: %s", err)
 	}
@@ -79,7 +79,7 @@ func getTestProbe() (Probe, error) {
 	endpoint := getEnv("S3_ENDPOINT", "localhost:9000")
 	accessKey := getEnv("S3_ACCESS_KEY", "9PWM3PGAOU5TESTINGKEY")
 	secretKey := getEnv("S3_SECRET_KEY", "p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY")
-	probe, err := NewProbe(endpoint, "", accessKey, secretKey, "monitoring-latency-test-", "monitoring-durab-test-", 300, make(chan bool, 1))
+	probe, err := NewProbe(endpoint, "", accessKey, secretKey, "monitoring-latency-test", "monitoring-durab-test", 300, make(chan bool, 1))
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}
@@ -87,6 +87,7 @@ func getTestProbe() (Probe, error) {
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s (please set ENV: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY)", err)
 	}
+	probe.durabilityItemTotal = 10
 	return probe, err
 }
 

@@ -40,6 +40,7 @@ type Probe struct {
 	latencyBucketName    string
 	durabilityBucketName string
 	probeRatePerMin      int
+	durabilityItemTotal  int
 	s3Client             *minio.Client
 	controlChan          chan bool
 }
@@ -61,6 +62,7 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 		latencyBucketName:    latencyBucketName,
 		durabilityBucketName: durabilityBucketName,
 		probeRatePerMin:      probeRatePerMin,
+		durabilityItemTotal:  10000,
 		controlChan:          controlChan,
 		s3Client:             minioClient,
 	}, nil
@@ -89,12 +91,12 @@ func (p *Probe) StartProbing() error {
 			log.Println("Terminating probe on", p.name)
 			return nil
 		case <-time.After(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond):
-			go p.performCheck()
+			go p.performLatencyChecks()
 		}
 	}
 }
 
-func (p *Probe) performCheck() error {
+func (p *Probe) performLatencyChecks() error {
 	objectName, _ := randomHex(20)
 	objectSize := int64(1024)
 
@@ -168,7 +170,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 	objectData, _ := randomObject(objectSize)
 
 	var objectName string
-	for i := 0; i <= 10000; i++ {
+	for i := 0; i <= p.durabilityItemTotal; i++ {
 		objectName = objectSuffix + strconv.Itoa(i)
 		_, err := p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 
@@ -178,7 +180,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 			_, err = p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		}
 		if i%100 == 0 {
-			log.Printf("> %d objects written (%d%%)", i, i/100)
+			log.Printf("> %d objects written (%d%%)", i, (i/p.durabilityItemTotal)*100)
 		}
 	}
 	return nil
