@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"log"
+	"strconv"
 	"time"
 
 	minio "github.com/minio/minio-go/v6"
@@ -68,9 +69,14 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 // StartProbing start to probe the S3 endpoint
 func (p *Probe) StartProbing() error {
 
-	err := p.prepareBucket()
+	err := p.prepareLatencyBucket()
 	if err != nil {
-		log.Println("Error: cannot prepare bucket:", err)
+		log.Println("Error: cannot prepare latency bucket:", err)
+		return err
+	}
+	err = p.prepareDurabilityBucket()
+	if err != nil {
+		log.Println("Error: cannot prepare durability bucket:", err)
 		return err
 	}
 
@@ -143,7 +149,43 @@ func (p *Probe) mesureOperation(operationName string, operation func() error) er
 	return nil
 }
 
-func (p *Probe) prepareBucket() error {
+func (p *Probe) prepareDurabilityBucket() error {
+	log.Println("Preparing durability bucket")
+	exists, errBucketExists := p.s3Client.BucketExists(p.durabilityBucketName)
+	if errBucketExists != nil {
+		return errBucketExists
+	}
+	if exists {
+		return nil
+	}
+	err := p.s3Client.MakeBucket(p.durabilityBucketName, "")
+	if err != nil {
+		return err
+	}
+
+	objectSuffix := "fake-item-"
+	objectSize := int64(1024 * 1024)
+	objectData, _ := randomObject(objectSize)
+
+	var objectName string
+	for i := 0; i <= 10000; i++ {
+		objectName = objectSuffix + strconv.Itoa(i)
+		_, err := p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+
+		for err != nil {
+			log.Printf("Error (item: %d): %s, retrying in (5s)", i, err)
+			time.Sleep(5 * time.Second)
+			_, err = p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+		}
+		if i%100 == 0 {
+			log.Printf("> %d objects written (%d%%)", i, i/100)
+		}
+	}
+	return nil
+}
+
+func (p *Probe) prepareLatencyBucket() error {
+	log.Println("Preparing latency bucket")
 	exists, errBucketExists := p.s3Client.BucketExists(p.latencyBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
@@ -162,11 +204,11 @@ func (p *Probe) prepareBucket() error {
 			</Expiration>
 		</Rule>
 	</LifecycleConfiguration>`
-	p.s3Client.SetBucketLifecycle(p.latencyBucketName, lifecycle1d)
 	if err != nil {
 		return err
 	}
 
+	p.s3Client.SetBucketLifecycle(p.latencyBucketName, lifecycle1d)
 	return nil
 }
 
