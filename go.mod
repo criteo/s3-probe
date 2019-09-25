@@ -1,4 +1,4 @@
-module github.com/s3-probe
+module github.com/criteo/s3-probe
 
 go 1.13
 
