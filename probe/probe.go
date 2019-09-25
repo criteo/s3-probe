@@ -29,6 +29,21 @@ var s3SuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Help: "Total number of successful requests on S3 endpoint",
 }, []string{"operation", "endpoint"})
 
+var s3ExpectedDurabilityItems = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "s3_durability_items_expected",
+	Help: "Number of items that should be present on the endpoint",
+}, []string{"endpoint"})
+
+var s3FoundDurabilityItems = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	Name: "s3_durability_items_found",
+	Help: "Number of items that are present on the endpoint",
+}, []string{"endpoint"})
+
+var probeBucketAttempt = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "probe_bucket_created_total",
+	Help: "Total number of monitoring bucket created",
+}, []string{"endpoint"})
+
 const millisecondInMinute = 60_000
 
 // Probe is a S3 probe
@@ -96,8 +111,18 @@ func (p *Probe) StartProbing() error {
 }
 
 func (p *Probe) performDurabilityChecks() error {
-	// Prepare the bucket in case it's removed
-
+	doneCh := make(chan struct{})
+	s3ExpectedDurabilityItems.WithLabelValues(p.name).Set(float64(p.durabilityItemTotal))
+	objectCh := p.s3Client.ListObjects(p.durabilityBucketName, "", false, doneCh)
+	objectTotal := 0
+	for object := range objectCh {
+		if object.Err != nil {
+			log.Println(object.Err)
+			return object.Err
+		}
+		objectTotal++
+	}
+	s3FoundDurabilityItems.WithLabelValues(p.name).Set(float64(objectTotal))
 	return nil
 }
 
@@ -170,7 +195,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 	}
 
 	log.Println("Preparing durability bucket")
-
+	probeBucketAttempt.WithLabelValues(p.name).Inc()
 	objectSuffix := "fake-item-"
 	objectSize := int64(1024 * 1024)
 	objectData, _ := randomObject(objectSize)
@@ -201,7 +226,13 @@ func (p *Probe) prepareLatencyBucket() error {
 		return nil
 	}
 	log.Println("Preparing latency bucket")
+	probeBucketAttempt.WithLabelValues(p.name).Inc()
+
 	err := p.s3Client.MakeBucket(p.latencyBucketName, "")
+	if err != nil {
+		return err
+	}
+
 	lifecycle1d := `<LifecycleConfiguration>
 		<Rule>
 			<ID>expire-bucket</ID>
@@ -212,9 +243,6 @@ func (p *Probe) prepareLatencyBucket() error {
 			</Expiration>
 		</Rule>
 	</LifecycleConfiguration>`
-	if err != nil {
-		return err
-	}
 
 	p.s3Client.SetBucketLifecycle(p.latencyBucketName, lifecycle1d)
 	return nil
