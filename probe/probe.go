@@ -70,18 +70,6 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 
 // StartProbing start to probe the S3 endpoint
 func (p *Probe) StartProbing() error {
-
-	err := p.prepareLatencyBucket()
-	if err != nil {
-		log.Println("Error: cannot prepare latency bucket:", err)
-		return err
-	}
-	err = p.prepareDurabilityBucket()
-	if err != nil {
-		log.Println("Error: cannot prepare durability bucket:", err)
-		return err
-	}
-
 	log.Println("Starting probing")
 	for {
 		select {
@@ -91,9 +79,26 @@ func (p *Probe) StartProbing() error {
 			log.Println("Terminating probe on", p.name)
 			return nil
 		case <-time.After(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond):
+			err := p.prepareLatencyBucket()
+			if err != nil {
+				log.Println("Error: cannot prepare latency bucket:", err)
+				return err
+			}
+			err = p.prepareDurabilityBucket()
+			if err != nil {
+				log.Println("Error: cannot prepare durability bucket:", err)
+				return err
+			}
 			go p.performLatencyChecks()
+			go p.performDurabilityChecks()
 		}
 	}
+}
+
+func (p *Probe) performDurabilityChecks() error {
+	// Prepare the bucket in case it's removed
+
+	return nil
 }
 
 func (p *Probe) performLatencyChecks() error {
@@ -152,7 +157,6 @@ func (p *Probe) mesureOperation(operationName string, operation func() error) er
 }
 
 func (p *Probe) prepareDurabilityBucket() error {
-	log.Println("Preparing durability bucket")
 	exists, errBucketExists := p.s3Client.BucketExists(p.durabilityBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
@@ -165,12 +169,14 @@ func (p *Probe) prepareDurabilityBucket() error {
 		return err
 	}
 
+	log.Println("Preparing durability bucket")
+
 	objectSuffix := "fake-item-"
 	objectSize := int64(1024 * 1024)
 	objectData, _ := randomObject(objectSize)
 
 	var objectName string
-	for i := 0; i <= p.durabilityItemTotal; i++ {
+	for i := 0; i < p.durabilityItemTotal; i++ {
 		objectName = objectSuffix + strconv.Itoa(i)
 		_, err := p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 
@@ -187,7 +193,6 @@ func (p *Probe) prepareDurabilityBucket() error {
 }
 
 func (p *Probe) prepareLatencyBucket() error {
-	log.Println("Preparing latency bucket")
 	exists, errBucketExists := p.s3Client.BucketExists(p.latencyBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
@@ -195,6 +200,7 @@ func (p *Probe) prepareLatencyBucket() error {
 	if exists {
 		return nil
 	}
+	log.Println("Preparing latency bucket")
 	err := p.s3Client.MakeBucket(p.latencyBucketName, "")
 	lifecycle1d := `<LifecycleConfiguration>
 		<Rule>
