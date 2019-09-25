@@ -1,9 +1,9 @@
-name: Tests
-on: push
+name: Release
+on: release
 jobs:
 
   build:
-    name: Build
+    name: Publish artifacts
     runs-on: ubuntu-latest
     steps:
 
@@ -27,13 +27,10 @@ jobs:
     - name: Build
       run: go build -v -o bin/s3-probe .
 
-    - name: Test
-      run: |
-        docker run -d -p 9000:9000 -e "MINIO_ACCESS_KEY=9PWM3PGAOU5TESTINGKEY" -e "MINIO_SECRET_KEY=p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY" minio/minio server /data
-        go test -timeout 30s ./...
-
-    - uses: actions/upload-artifact@master
-      with:
-        name: s3-probe
-        path: bin/
+    - name: Upload
+      uses: fnkr/github-action-ghr@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GHR_PATH: bin/
+        GHR_COMPRESS: gz
 
