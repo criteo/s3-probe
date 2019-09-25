@@ -22,8 +22,10 @@ func main() {
 	accessKey := flag.String("s3-access-key", "", "User key of the S3 endpoint")
 	secretKey := flag.String("s3-secret-key", "", "Access key of the S3 endpoint")
 	probeRatePerMin := flag.Int("probe-rate", 120, "Rate of probing per minute (how many checks are done in a minute)")
+	durabilityItemSize := flag.Int("item-size", 1024*10, "Size of the item to insert into S3 for durability testing")
+	durabilityItemTotal := flag.Int("item-total", 100000, "Total number of items to write into S3 for durabbility testing")
 	flag.Parse()
-	w := watcher.NewWatcher(*consulAddr, *tag, *endpointSuffix, *latencylatencyBucketName, *durabilityBucketName, *accessKey, *secretKey, *probeRatePerMin)
+	w := watcher.NewWatcher(*consulAddr, *tag, *endpointSuffix, *latencylatencyBucketName, *durabilityBucketName, *durabilityItemSize, *durabilityItemTotal, *accessKey, *secretKey, *probeRatePerMin)
 
 	http.Handle("/metrics", promhttp.Handler())
 	go http.ListenAndServe(*addr, nil)

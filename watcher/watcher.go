@@ -16,6 +16,8 @@ type Watcher struct {
 	endpointSuffix       string
 	latencyBucketName    string
 	durabilityBucketName string
+	durabilityItemSize   int
+	durabilityItemTotal  int
 	accessKey            string
 	secretKey            string
 	probeRatePerMin      int
@@ -23,7 +25,7 @@ type Watcher struct {
 }
 
 // NewWatcher creates a new watcher and prepare the consul client
-func NewWatcher(consulAddr string, consulTag string, suffix string, latencyBucketName string, durabilityBucketName string, accessKey string, secretKey string, probeRatePerMin int) Watcher {
+func NewWatcher(consulAddr string, consulTag string, suffix string, latencyBucketName string, durabilityBucketName string, durabilityItemSize int, durabilityItemTotal int, accessKey string, secretKey string, probeRatePerMin int) Watcher {
 	defaultConfig := consul_api.DefaultConfig()
 	defaultConfig.Address = consulAddr
 	client, err := consul_api.NewClient(defaultConfig)
@@ -36,6 +38,8 @@ func NewWatcher(consulAddr string, consulTag string, suffix string, latencyBucke
 		endpointSuffix:       suffix,
 		latencyBucketName:    latencyBucketName,
 		durabilityBucketName: durabilityBucketName,
+		durabilityItemSize:   durabilityItemSize,
+		durabilityItemTotal:  durabilityItemTotal,
 		accessKey:            accessKey,
 		secretKey:            secretKey,
 		probeRatePerMin:      probeRatePerMin,
@@ -64,7 +68,7 @@ func (w *Watcher) createNewProbes(servicesToAdd []string) {
 		log.Printf("Creating new probe for: %s", servicesToAdd[i])
 		probeChan = make(chan bool)
 		w.s3Pools[servicesToAdd[i]] = probeChan
-		p, err := probe.NewProbe(servicesToAdd[i], w.endpointSuffix, w.accessKey, w.secretKey, w.latencyBucketName, w.durabilityBucketName, w.probeRatePerMin, probeChan)
+		p, err := probe.NewProbe(servicesToAdd[i], w.endpointSuffix, w.accessKey, w.secretKey, w.latencyBucketName, w.durabilityBucketName, w.probeRatePerMin, w.durabilityItemSize, w.durabilityItemTotal, probeChan)
 		if err != nil {
 			log.Println("Error while creating probe:", err)
 		}

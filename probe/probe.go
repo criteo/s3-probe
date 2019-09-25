@@ -55,13 +55,14 @@ type Probe struct {
 	latencyBucketName    string
 	durabilityBucketName string
 	probeRatePerMin      int
+	durabilityItemSize   int
 	durabilityItemTotal  int
 	s3Client             *minio.Client
 	controlChan          chan bool
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, durabilityBucketName string, probeRatePerMin int, controlChan chan bool) (Probe, error) {
+func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, durabilityBucketName string, probeRatePerMin int, durabilityItemSize int, durabilityItemTotal int, controlChan chan bool) (Probe, error) {
 	endpoint := name + suffix
 	minioClient, err := minio.New(endpoint, accessKey, secretKey, false)
 	if err != nil {
@@ -77,7 +78,8 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 		latencyBucketName:    latencyBucketName,
 		durabilityBucketName: durabilityBucketName,
 		probeRatePerMin:      probeRatePerMin,
-		durabilityItemTotal:  10000,
+		durabilityItemSize:   durabilityItemSize,
+		durabilityItemTotal:  durabilityItemTotal,
 		controlChan:          controlChan,
 		s3Client:             minioClient,
 	}, nil
@@ -197,7 +199,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 	log.Println("Preparing durability bucket")
 	probeBucketAttempt.WithLabelValues(p.name).Inc()
 	objectSuffix := "fake-item-"
-	objectSize := int64(1024 * 1024)
+	objectSize := int64(p.durabilityItemSize)
 	objectData, _ := randomObject(objectSize)
 
 	var objectName string
@@ -211,7 +213,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 			_, err = p.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		}
 		if i%100 == 0 {
-			log.Printf("> %d objects written (%d%%)", i, (i/p.durabilityItemTotal)*100)
+			log.Printf("%s> %d objects written (%d%%)", p.name, i, int((float64(i)/float64(p.durabilityItemTotal))*100))
 		}
 	}
 	return nil
