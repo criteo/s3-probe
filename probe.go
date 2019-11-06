@@ -5,9 +5,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/criteo/s3-probe/watcher"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(200)
+}
 
 func main() {
 
@@ -27,7 +31,9 @@ func main() {
 	flag.Parse()
 	w := watcher.NewWatcher(*consulAddr, *tag, *endpointSuffix, *latencylatencyBucketName, *durabilityBucketName, *durabilityItemSize, *durabilityItemTotal, *accessKey, *secretKey, *probeRatePerMin)
 
+	http.HandleFunc("/ready", healthCheck)
 	http.Handle("/metrics", promhttp.Handler())
+
 	go http.ListenAndServe(*addr, nil)
 	w.WatchPools(*interval)
 }
