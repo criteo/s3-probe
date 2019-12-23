@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/criteo/s3-probe/config"
 	minio "github.com/minio/minio-go/v6"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -62,9 +63,9 @@ type Probe struct {
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(name string, suffix string, accessKey string, secretKey string, latencyBucketName string, durabilityBucketName string, probeRatePerMin int, durabilityItemSize int, durabilityItemTotal int, controlChan chan bool) (Probe, error) {
-	endpoint := name + suffix
-	minioClient, err := minio.New(endpoint, accessKey, secretKey, false)
+func NewProbe(name string, cfg config.Config, controlChan chan bool) (Probe, error) {
+	endpoint := name + *cfg.EndpointSuffix
+	minioClient, err := minio.New(endpoint, *cfg.AccessKey, *cfg.SecretKey, false)
 	if err != nil {
 		return Probe{}, err
 	}
@@ -73,13 +74,13 @@ func NewProbe(name string, suffix string, accessKey string, secretKey string, la
 	return Probe{
 		name:                 name,
 		endpoint:             endpoint,
-		secretKey:            secretKey,
-		accessKey:            accessKey,
-		latencyBucketName:    latencyBucketName,
-		durabilityBucketName: durabilityBucketName,
-		probeRatePerMin:      probeRatePerMin,
-		durabilityItemSize:   durabilityItemSize,
-		durabilityItemTotal:  durabilityItemTotal,
+		secretKey:            *cfg.SecretKey,
+		accessKey:            *cfg.AccessKey,
+		latencyBucketName:    *cfg.LatencyBucketName,
+		durabilityBucketName: *cfg.DurabilityBucketName,
+		probeRatePerMin:      *cfg.ProbeRatePerMin,
+		durabilityItemSize:   *cfg.DurabilityItemSize,
+		durabilityItemTotal:  *cfg.DurabilityItemTotal,
 		controlChan:          controlChan,
 		s3Client:             minioClient,
 	}, nil

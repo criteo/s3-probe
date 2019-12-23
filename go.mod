@@ -8,4 +8,5 @@ require (
 	github.com/prometheus/client_golang v0.9.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.4.0
+	honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099
 )
