@@ -2,9 +2,9 @@ package probe
 
 import (
 	"log"
-	"os"
 	"testing"
 
+	"github.com/criteo/s3-probe/config"
 	minio "github.com/minio/minio-go/v6"
 )
 
@@ -76,10 +76,9 @@ func TestStartProbingProperlyTerminate(t *testing.T) {
 }
 
 func getTestProbe() (Probe, error) {
-	endpoint := getEnv("S3_ENDPOINT", "localhost:9000")
-	accessKey := getEnv("S3_ACCESS_KEY", "9PWM3PGAOU5TESTINGKEY")
-	secretKey := getEnv("S3_SECRET_KEY", "p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY")
-	probe, err := NewProbe(endpoint, "", accessKey, secretKey, "monitoring-latency-test", "monitoring-durab-test", 300, 10, 10, make(chan bool, 1))
+	endpoint := config.GetEnv("S3_ENDPOINT", "localhost:9000")
+
+	probe, err := NewProbe(endpoint, config.GetTestConfig(), make(chan bool, 1))
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}
@@ -89,12 +88,4 @@ func getTestProbe() (Probe, error) {
 	}
 	probe.durabilityItemTotal = 10
 	return probe, err
-}
-
-func getEnv(env string, defaultVal string) string {
-	val := os.Getenv(env)
-	if val == "" {
-		val = defaultVal
-	}
-	return val
 }

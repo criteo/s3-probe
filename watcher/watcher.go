@@ -6,44 +6,32 @@ import (
 
 	"github.com/criteo/s3-probe/probe"
 
+	"github.com/criteo/s3-probe/config"
+
 	consul_api "github.com/hashicorp/consul/api"
 )
 
 // Watcher manages the pool of S3 endpoints to monitor
 type Watcher struct {
-	consulClient         *consul_api.Client
-	consulTag            string
-	endpointSuffix       string
-	latencyBucketName    string
-	durabilityBucketName string
-	durabilityItemSize   int
-	durabilityItemTotal  int
-	accessKey            string
-	secretKey            string
-	probeRatePerMin      int
-	s3Pools              map[string](chan bool)
+	consulClient *consul_api.Client
+	cfg          config.Config
+	consulTag    string
+	s3Pools      map[string](chan bool)
 }
 
 // NewWatcher creates a new watcher and prepare the consul client
-func NewWatcher(consulAddr string, consulTag string, suffix string, latencyBucketName string, durabilityBucketName string, durabilityItemSize int, durabilityItemTotal int, accessKey string, secretKey string, probeRatePerMin int) Watcher {
+func NewWatcher(cfg config.Config) Watcher {
 	defaultConfig := consul_api.DefaultConfig()
-	defaultConfig.Address = consulAddr
+	defaultConfig.Address = *cfg.ConsulAddr
 	client, err := consul_api.NewClient(defaultConfig)
 	if err != nil {
 		panic(err)
 	}
 	return Watcher{
-		consulClient:         client,
-		consulTag:            consulTag,
-		endpointSuffix:       suffix,
-		latencyBucketName:    latencyBucketName,
-		durabilityBucketName: durabilityBucketName,
-		durabilityItemSize:   durabilityItemSize,
-		durabilityItemTotal:  durabilityItemTotal,
-		accessKey:            accessKey,
-		secretKey:            secretKey,
-		probeRatePerMin:      probeRatePerMin,
-		s3Pools:              make(map[string](chan bool)),
+		cfg:          cfg,
+		consulClient: client,
+		consulTag:    *cfg.Tag,
+		s3Pools:      make(map[string](chan bool)),
 	}
 }
 
@@ -68,7 +56,7 @@ func (w *Watcher) createNewProbes(servicesToAdd []string) {
 		log.Printf("Creating new probe for: %s", servicesToAdd[i])
 		probeChan = make(chan bool)
 		w.s3Pools[servicesToAdd[i]] = probeChan
-		p, err := probe.NewProbe(servicesToAdd[i], w.endpointSuffix, w.accessKey, w.secretKey, w.latencyBucketName, w.durabilityBucketName, w.probeRatePerMin, w.durabilityItemSize, w.durabilityItemTotal, probeChan)
+		p, err := probe.NewProbe(servicesToAdd[i], w.cfg, probeChan)
 		if err != nil {
 			log.Println("Error while creating probe:", err)
 		}

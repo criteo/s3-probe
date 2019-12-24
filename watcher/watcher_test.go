@@ -2,15 +2,18 @@ package watcher
 
 import (
 	"fmt"
+	"github.com/criteo/s3-probe/config"
 	"reflect"
 	"sort"
 	"testing"
 )
 
 func TestNewWrapperCreatesWrapper(t *testing.T) {
-	addr := "localhost:9999"
 	tag := "randomTag"
-	w := NewWatcher(addr, tag, "", "", "", 0, 0, "", "", 120)
+
+	cfg := config.GetTestConfig()
+	cfg.Tag = &tag
+	w := NewWatcher(cfg)
 	if w.consulTag != tag {
 		t.Errorf("Constructor doesn't set tag properly")
 	}
