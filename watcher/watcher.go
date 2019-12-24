@@ -11,6 +11,11 @@ import (
 	consul_api "github.com/hashicorp/consul/api"
 )
 
+type s3Service struct {
+	name        string
+	serviceType string
+}
+
 // Watcher manages the pool of S3 endpoints to monitor
 type Watcher struct {
 	consulClient *consul_api.Client
@@ -50,13 +55,13 @@ func (w *Watcher) WatchPools(interval time.Duration) {
 
 }
 
-func (w *Watcher) createNewProbes(servicesToAdd []string) {
+func (w *Watcher) createNewProbes(servicesToAdd []s3Service) {
 	var probeChan chan bool
 	for i := range servicesToAdd {
 		log.Printf("Creating new probe for: %s", servicesToAdd[i])
 		probeChan = make(chan bool)
-		w.s3Pools[servicesToAdd[i]] = probeChan
-		p, err := probe.NewProbe(servicesToAdd[i], w.cfg, probeChan)
+		w.s3Pools[servicesToAdd[i].name] = probeChan
+		p, err := probe.NewProbe(servicesToAdd[i].name, w.cfg, probeChan)
 		if err != nil {
 			log.Println("Error while creating probe:", err)
 		}
@@ -64,12 +69,12 @@ func (w *Watcher) createNewProbes(servicesToAdd []string) {
 	}
 }
 
-func (w *Watcher) flushOldProbes(servicesToRemove []string) {
+func (w *Watcher) flushOldProbes(servicesToRemove []s3Service) {
 	var ok bool
 	var probeChan chan bool
 	for i := range servicesToRemove {
 		log.Printf("Removing old probe for: %s", servicesToRemove[i])
-		probeChan, ok = w.s3Pools[servicesToRemove[i]]
+		probeChan, ok = w.s3Pools[servicesToRemove[i].name]
 		if ok {
 			probeChan <- false
 			close(probeChan)
@@ -79,29 +84,31 @@ func (w *Watcher) flushOldProbes(servicesToRemove []string) {
 
 // getServicesToModify compare services as seen in consul and services that are running in the probe. Every service that
 // Are in consul and not on the probe are added to the probe. Services in the probe that are not in consul are removed
-func (w *Watcher) getServicesToModify(servicesFromConsul []string, watchedServices []string) ([]string, []string) {
+func (w *Watcher) getServicesToModify(servicesFromConsul []s3Service, watchedServices []s3Service) ([]s3Service, []s3Service) {
 	servicesToAdd := getSliceDiff(watchedServices, servicesFromConsul)
 	servicesToRemove := getSliceDiff(servicesFromConsul, watchedServices)
 	return servicesToAdd, servicesToRemove
 }
 
-func (w *Watcher) getWatchedServices() []string {
-	currentServices := []string{}
+func (w *Watcher) getWatchedServices() []s3Service {
+	currentServices := []s3Service{}
 
 	for k := range w.s3Pools {
-		currentServices = append(currentServices, k)
+		currentServices = append(currentServices, s3Service{name: k})
 	}
 	return currentServices
 }
 
-func (w *Watcher) getServices() []string {
+func (w *Watcher) getServices() []s3Service {
 	catalog := w.consulClient.Catalog()
 	services, _, _ := catalog.Services(nil)
 
-	var s3Services []string
-	for service := range services {
-		for i := range services[service] {
-			if services[service][i] == w.consulTag {
+	var s3Services []s3Service
+	var service s3Service
+	for serviceName := range services {
+		for i := range services[serviceName] {
+			if services[serviceName][i] == w.consulTag {
+				service = s3Service{name: serviceName, serviceType: "simple"}
 				s3Services = append(s3Services, service)
 				break
 			}
@@ -111,14 +118,14 @@ func (w *Watcher) getServices() []string {
 }
 
 // getDiff return the elements from mainSlice that are not in subSlice
-func getSliceDiff(mainSlice []string, subSlice []string) []string {
+func getSliceDiff(mainSlice []s3Service, subSlice []s3Service) []s3Service {
 	mainIndex := make(map[string]bool)
-	var result []string
+	var result []s3Service
 	for i := range mainSlice {
-		mainIndex[mainSlice[i]] = true
+		mainIndex[mainSlice[i].name] = true
 	}
 	for i := range subSlice {
-		if !mainIndex[subSlice[i]] {
+		if !mainIndex[subSlice[i].name] {
 			result = append(result, subSlice[i])
 		}
 	}
