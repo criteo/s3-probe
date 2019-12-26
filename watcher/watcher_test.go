@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/criteo/s3-probe/config"
+	"github.com/criteo/s3-probe/probe"
 )
 
-func s3ServicesFromStrings(strings []string) (s3Services []s3Service) {
+func s3ServicesFromStrings(strings []string) (s3Services []probe.S3Service) {
 	for i := range strings {
-		s3Services = append(s3Services, s3Service{name: strings[i]})
+		s3Services = append(s3Services, probe.S3Service{Name: strings[i]})
 	}
 	return s3Services
 }
@@ -39,7 +40,7 @@ func TestGetWatchedServicesReturnTheCorrectEntries(t *testing.T) {
 	}
 	services := w.getWatchedServices()
 	sort.SliceStable(testServices, func(i, j int) bool {
-		return testServices[i].name < testServices[j].name
+		return testServices[i].Name < testServices[j].Name
 	})
 	fmt.Println(testServices, services)
 	if !reflect.DeepEqual(testServices, services) {

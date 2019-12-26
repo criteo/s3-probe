@@ -12,12 +12,14 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
+	probe.durabilityBucketName = probe.durabilityBucketName + suffix
+	probe.durabilityItemTotal = 10
 	err := probe.prepareLatencyBucket()
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
 
-	exists, _ := probe.s3Client.BucketExists(probe.latencyBucketName)
+	exists, _ := probe.endpoint.s3Client.BucketExists(probe.latencyBucketName)
 	if !exists {
 		t.Errorf("Bucket preparation failed")
 	}
@@ -26,12 +28,17 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 	if err != nil {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
+
+	err = probe.prepareDurabilityBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
 }
 
 func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 	probe, _ := getTestProbe()
-	client, _ := minio.New(probe.endpoint, probe.accessKey, "FAKEFAKE", false)
-	probe.s3Client = client
+	client, _ := minio.New(probe.endpoint.name, probe.accessKey, "FAKEFAKE", false)
+	probe.endpoint.s3Client = client
 
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
@@ -41,7 +48,23 @@ func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 	}
 }
 
-func TestperformCheckSuccess(t *testing.T) {
+func TestPerformLatencyCheckSuccess(t *testing.T) {
+	probe, _ := getTestProbe()
+	suffix, _ := randomHex(8)
+	probe.latencyBucketName = probe.latencyBucketName + suffix
+	probe.durabilityBucketName = probe.durabilityBucketName + suffix
+	probe.durabilityItemTotal = 10
+	err := probe.prepareDurabilityBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
+	err = probe.performDurabilityChecks()
+	if err != nil {
+		t.Errorf("Probe check is failing: %s", err)
+	}
+}
+
+func TestDurabilityLatencyCheckSuccess(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
 	probe.latencyBucketName = probe.latencyBucketName + suffix
@@ -76,13 +99,13 @@ func TestStartProbingProperlyTerminate(t *testing.T) {
 }
 
 func getTestProbe() (Probe, error) {
-	endpoint := config.GetEnv("S3_ENDPOINT", "localhost:9000")
-
-	probe, err := NewProbe(endpoint, config.GetTestConfig(), make(chan bool, 1))
+	endpoint := config.GetEnv("S3_ENDPOINT_ADDR", "localhost:9000")
+	service := S3Service{Name: "test", Gateway: false}
+	probe, err := NewProbe(service, endpoint, config.GetTestConfig(), make(chan bool, 1))
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}
-	_, err = probe.s3Client.ListBuckets()
+	_, err = probe.endpoint.s3Client.ListBuckets()
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s (please set ENV: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY)", err)
 	}
