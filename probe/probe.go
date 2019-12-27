@@ -70,7 +70,30 @@ type s3endpoint struct {
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(service S3Service, endpoint string, cfg config.Config, controlChan chan bool) (Probe, error) {
+func NewProbe(service S3Service, endpoint string, gatewayEndpoints []s3endpoint, cfg config.Config, controlChan chan bool) (Probe, error) {
+	minioClient, err := newMinioClientFromEndpoint(endpoint, *cfg.AccessKey, *cfg.SecretKey)
+	if err != nil {
+		return Probe{}, err
+	}
+
+	log.Println("Probe created for:", endpoint)
+	return Probe{
+		name:                 service.Name,
+		gateway:              service.Gateway,
+		endpoint:             s3endpoint{name: endpoint, s3Client: minioClient},
+		secretKey:            *cfg.SecretKey,
+		accessKey:            *cfg.AccessKey,
+		latencyBucketName:    *cfg.LatencyBucketName,
+		durabilityBucketName: *cfg.DurabilityBucketName,
+		probeRatePerMin:      *cfg.ProbeRatePerMin,
+		durabilityItemSize:   *cfg.DurabilityItemSize,
+		durabilityItemTotal:  *cfg.DurabilityItemTotal,
+		controlChan:          controlChan,
+		gatewayEndpoints:     gatewayEndpoints,
+	}, nil
+}
+
+func newMinioClientFromEndpoint(endpoint string, accessKey string, secretKey string) (*minio.Client, error) {
 	re := regexp.MustCompile("^(http[s]+://)?(.*)")
 	match := re.FindStringSubmatch(endpoint)
 	secure := false
@@ -81,25 +104,7 @@ func NewProbe(service S3Service, endpoint string, cfg config.Config, controlChan
 		endpoint = match[2]
 	}
 
-	minioClient, err := minio.New(endpoint, *cfg.AccessKey, *cfg.SecretKey, secure)
-	if err != nil {
-		return Probe{}, err
-	}
-
-	log.Println("Probe created for:", endpoint)
-	return Probe{
-		name:                 service.Name,
-		gateway:              false,
-		endpoint:             s3endpoint{name: endpoint, s3Client: minioClient},
-		secretKey:            *cfg.SecretKey,
-		accessKey:            *cfg.AccessKey,
-		latencyBucketName:    *cfg.LatencyBucketName,
-		durabilityBucketName: *cfg.DurabilityBucketName,
-		probeRatePerMin:      *cfg.ProbeRatePerMin,
-		durabilityItemSize:   *cfg.DurabilityItemSize,
-		durabilityItemTotal:  *cfg.DurabilityItemTotal,
-		controlChan:          controlChan,
-	}, nil
+	return minio.New(endpoint, accessKey, secretKey, secure)
 }
 
 // StartProbing start to probe the S3 endpoint
