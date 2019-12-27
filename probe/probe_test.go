@@ -101,7 +101,7 @@ func TestStartProbingProperlyTerminate(t *testing.T) {
 func getTestProbe() (Probe, error) {
 	endpoint := config.GetEnv("S3_ENDPOINT_ADDR", "localhost:9000")
 	service := S3Service{Name: "test", Gateway: false}
-	probe, err := NewProbe(service, endpoint, config.GetTestConfig(), make(chan bool, 1))
+	probe, err := NewProbe(service, endpoint, []s3endpoint{}, config.GetTestConfig(), make(chan bool, 1))
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}
