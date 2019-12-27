@@ -68,7 +68,6 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg confi
 		if len(match) < 2 {
 			continue
 		}
-		log.Println(match, destinations[i])
 		endpointEntries, _, err := health.Service(match[2], "", false, &consul_api.QueryOptions{Datacenter: match[1]})
 		if err != nil {
 			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", match[0], match[1], match[2], err)
