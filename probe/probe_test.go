@@ -112,3 +112,44 @@ func getTestProbe() (Probe, error) {
 	probe.durabilityItemTotal = 10
 	return probe, err
 }
+
+func TestPrepareGatewayBucketCreateBucketIfNotExists(t *testing.T) {
+	probe, _ := getTestProbe()
+	suffix, _ := randomHex(8)
+	probe.gatewayBucketName = probe.gatewayBucketName + suffix
+	probe.gatewayEndpoints = append(probe.gatewayEndpoints, probe.endpoint)
+	err := probe.prepareGatewayBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
+	// Preparing an already ready bucket should not result in error
+	err = probe.prepareGatewayBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
+}
+
+func TestPrepareGatewayBucketCreateBucketFailIfNoGateways(t *testing.T) {
+	probe, _ := getTestProbe()
+	suffix, _ := randomHex(8)
+	probe.gatewayBucketName = probe.gatewayBucketName + suffix
+	err := probe.prepareGatewayBucket()
+	if err == nil {
+		t.Errorf("Bucket didn't fail without gateways")
+	}
+}
+
+func TestPerformGatewayCheckSuccess(t *testing.T) {
+	probe, _ := getTestProbe()
+	suffix, _ := randomHex(8)
+	probe.gatewayBucketName = probe.gatewayBucketName + suffix
+	probe.gatewayEndpoints = append(probe.gatewayEndpoints, probe.endpoint)
+	err := probe.prepareGatewayBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
+	err = probe.performGatewayChecks()
+	if err != nil {
+		t.Errorf("Probe check is failing: %s", err)
+	}
+}
