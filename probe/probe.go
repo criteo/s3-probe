@@ -228,7 +228,7 @@ func (p *Probe) performGatewayChecks() error {
 
 	objectData, _ := randomObject(objectSize)
 	operation := func() error {
-		_, err := p.endpoint.s3Client.PutObject(p.latencyBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+		_, err := p.endpoint.s3Client.PutObject(p.gatewayBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("gateway_put_object", operation); err != nil {
@@ -238,7 +238,7 @@ func (p *Probe) performGatewayChecks() error {
 	for i := range p.gatewayEndpoints {
 		operationName = "gateway_get_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
-		_, err := p.gatewayEndpoints[i].s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
+		_, err := p.gatewayEndpoints[i].s3Client.GetObject(p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {
@@ -247,7 +247,7 @@ func (p *Probe) performGatewayChecks() error {
 
 		operationName = "gateway_remove_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
-		err = p.gatewayEndpoints[i].s3Client.RemoveObject(p.latencyBucketName, objectName)
+		err = p.gatewayEndpoints[i].s3Client.RemoveObject(p.gatewayBucketName, objectName)
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {

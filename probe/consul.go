@@ -46,41 +46,56 @@ func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []
 }
 
 func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) []s3endpoint {
-	ok := false
-	destinationsRaw := ""
-	for i := range serviceEntries {
-		destinationsRaw, ok = serviceEntries[i].Service.Meta["gateway_destinations"]
-		if ok {
-			break
-		}
-	}
-
-	log.Printf("Processing gateway destinations: %s", destinationsRaw)
-
-	destinations := strings.Split(destinationsRaw, ";")
-	re := regexp.MustCompile("^(.*):(.*)$")
+	destinations := extractDestinations(serviceEntries)
 
 	s3endpoints := []s3endpoint{}
 	health := consulClient.Health()
 
 	for i := range destinations {
-		match := re.FindStringSubmatch(destinations[i])
-		if len(match) < 2 {
-			continue
-		}
-		endpointEntries, _, err := health.Service(match[2], "", false, &consul_api.QueryOptions{Datacenter: match[1]})
+
+		endpointEntries, _, err := health.Service(destinations[i].service, "", false, &consul_api.QueryOptions{Datacenter: destinations[i].datacenter})
 		if err != nil {
-			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", match[0], match[1], match[2], err)
+			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destinations[i].raw, destinations[i].datacenter, destinations[i].service, err)
 		}
-		endpointName := getEndpointFromConsul(match[2], *cfg.EndpointSuffix, endpointEntries)
+		endpointName := getEndpointFromConsul(destinations[i].service, *cfg.EndpointSuffix, endpointEntries)
 		minioClient, err := newMinioClientFromEndpoint(endpointName, *cfg.AccessKey, *cfg.SecretKey)
 		if err != nil {
-			log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", match[0], match[1], match[2], err)
+			log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destinations[i].raw, destinations[i].datacenter, destinations[i].service, err)
 		}
 		s3endpoints = append(s3endpoints, s3endpoint{name: endpointName, s3Client: minioClient})
 		log.Printf("Added gateway destination: %s", endpointName)
 	}
 	return s3endpoints
+}
+
+type destination struct {
+	datacenter string
+	service    string
+	raw        string
+}
+
+func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destinations []destination) {
+	ok := false
+	rawDestinations := ""
+	for i := range serviceEntries {
+		rawDestinations, ok = serviceEntries[i].Service.Meta["gateway_destinations"]
+		if ok {
+			break
+		}
+	}
+
+	log.Printf("Processing gateway destinations: %s", rawDestinations)
+	rawDestinationList := strings.Split(rawDestinations, ";")
+	re := regexp.MustCompile("^(.*):(.*)$")
+
+	for i := range rawDestinationList {
+		match := re.FindStringSubmatch(rawDestinationList[i])
+		if len(match) < 2 {
+			continue
+		}
+		destinations = append(destinations, destination{raw: match[0], datacenter: match[1], service: match[2]})
+	}
+	return destinations
 }
 
 // getServicePort return the first port found in the service or 80
