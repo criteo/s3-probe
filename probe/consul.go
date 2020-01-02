@@ -1,6 +1,7 @@
 package probe
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -21,31 +22,39 @@ func NewProbeFromConsul(service S3Service, cfg config.Config, consulClient consu
 	health := consulClient.Health()
 	serviceEntries, _, _ := health.Service(service.Name, "", false, nil)
 
-	endpoint := getEndpointFromConsul(service.Name, *cfg.EndpointSuffix, serviceEntries)
-
-	readEndpoints := []s3endpoint{}
-	if service.Gateway {
-		readEndpoints = extractGatewayEndoints(serviceEntries, cfg, consulClient)
+	endpoint, err := getEndpointFromConsul(service.Name, *cfg.EndpointSuffix, serviceEntries)
+	if err != nil {
+		log.Println("Could not generate endpoint from consul:", err)
+		return Probe{}, err
 	}
-
+	var readEndpoints []s3endpoint
+	if service.Gateway {
+		readEndpoints, err = extractGatewayEndoints(serviceEntries, cfg, consulClient)
+		if err != nil {
+			return Probe{}, err
+		}
+	}
 	return NewProbe(service, endpoint, readEndpoints, cfg, controlChan)
 }
 
-func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []*consul_api.ServiceEntry) string {
+func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []*consul_api.ServiceEntry) (string, error) {
 	endpoint := ""
 	if proxy, ok := getProxyEndpoint(serviceEntries); ok {
 		endpoint = proxy
 	} else {
-		port := getServicePort(serviceEntries)
-		dc := getDatacenter(serviceEntries)
+		port, err := getServicePort(serviceEntries)
+		if err != nil {
+			return "", err
+		}
+		dc, err := getDatacenter(serviceEntries)
 		endpointSuffixWithDC := strings.ReplaceAll(endpointSuffix, "{dc}", dc)
 		endpoint = fmt.Sprintf("%s%s:%d", name, endpointSuffixWithDC, port)
 	}
 
-	return endpoint
+	return endpoint, nil
 }
 
-func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) []s3endpoint {
+func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) ([]s3endpoint, error) {
 	destinations := extractDestinations(serviceEntries)
 
 	s3endpoints := []s3endpoint{}
@@ -56,16 +65,21 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg confi
 		endpointEntries, _, err := health.Service(destinations[i].service, "", false, &consul_api.QueryOptions{Datacenter: destinations[i].datacenter})
 		if err != nil {
 			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destinations[i].raw, destinations[i].datacenter, destinations[i].service, err)
+			return s3endpoints, err
 		}
-		endpointName := getEndpointFromConsul(destinations[i].service, *cfg.EndpointSuffix, endpointEntries)
+		endpointName, err := getEndpointFromConsul(destinations[i].service, *cfg.EndpointSuffix, endpointEntries)
+		if err != nil {
+			return s3endpoints, err
+		}
 		minioClient, err := newMinioClientFromEndpoint(endpointName, *cfg.AccessKey, *cfg.SecretKey)
 		if err != nil {
 			log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destinations[i].raw, destinations[i].datacenter, destinations[i].service, err)
+			return []s3endpoint{}, err
 		}
 		s3endpoints = append(s3endpoints, s3endpoint{name: endpointName, s3Client: minioClient})
 		log.Printf("Added gateway destination: %s", endpointName)
 	}
-	return s3endpoints
+	return s3endpoints, nil
 }
 
 type destination struct {
@@ -75,12 +89,10 @@ type destination struct {
 }
 
 func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destinations []destination) {
-	ok := false
 	rawDestinations := ""
 	for i := range serviceEntries {
-		rawDestinations, ok = serviceEntries[i].Service.Meta["gateway_destinations"]
-		if ok {
-			break
+		if dst, ok := serviceEntries[i].Service.Meta["gateway_destinations"]; ok {
+			rawDestinations = dst
 		}
 	}
 
@@ -99,22 +111,18 @@ func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destination
 }
 
 // getServicePort return the first port found in the service or 80
-func getServicePort(serviceEntries []*consul_api.ServiceEntry) int {
-	port := 80
-	for i := range serviceEntries {
-		port = serviceEntries[i].Service.Port
-		break
+func getServicePort(serviceEntries []*consul_api.ServiceEntry) (int, error) {
+	if len(serviceEntries) == 0 {
+		return 80, errors.New("Consul service is empty")
 	}
-	return port
+	return serviceEntries[0].Service.Port, nil
 }
 
-func getDatacenter(serviceEntries []*consul_api.ServiceEntry) string {
-	dc := ""
-	for i := range serviceEntries {
-		dc = serviceEntries[i].Node.Datacenter
-		break
+func getDatacenter(serviceEntries []*consul_api.ServiceEntry) (string, error) {
+	if len(serviceEntries) == 0 {
+		return "", errors.New("Consul service is empty")
 	}
-	return dc
+	return serviceEntries[0].Node.Datacenter, nil
 }
 
 // getServicePort return the first port found in the service or 80

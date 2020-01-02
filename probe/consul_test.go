@@ -29,8 +29,8 @@ func getTestServiceEntries() (entries []*consul_api.ServiceEntry) {
 
 func TestGenerateEndointFromConsulWithoutProxyData(t *testing.T) {
 	entries := getTestServiceEntries()
-	endpoint := getEndpointFromConsul("test", ".{dc}.prod", entries)
-	if endpoint != "test.us-east-1.prod:8080" {
+	endpoint, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
+	if endpoint != "test.us-east-1.prod:8080" || err != nil {
 		t.Errorf("Failed to generate URL from Consul data")
 	}
 }
@@ -38,8 +38,8 @@ func TestGenerateEndointFromConsulWithoutProxyData(t *testing.T) {
 func TestGenerateEndointFromConsulWithProxyData(t *testing.T) {
 	entries := getTestServiceEntries()
 	entries[0].Service.Meta["proxy_address"] = "foo.bar"
-	endpoint := getEndpointFromConsul("test", ".{dc}.prod", entries)
-	if endpoint != "foo.bar" {
+	endpoint, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
+	if endpoint != "foo.bar" || err != nil {
 		t.Errorf("Failed to generate URL from proxy_address data")
 	}
 }
