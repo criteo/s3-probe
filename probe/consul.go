@@ -55,9 +55,13 @@ func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []
 }
 
 func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) ([]s3endpoint, error) {
-	destinations := extractDestinations(serviceEntries)
-
 	s3endpoints := []s3endpoint{}
+
+	destinations, err := extractDestinations(serviceEntries)
+	if err != nil {
+		return s3endpoints, err
+	}
+
 	health := consulClient.Health()
 
 	for i := range destinations {
@@ -88,7 +92,7 @@ type destination struct {
 	raw        string
 }
 
-func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destinations []destination) {
+func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destinations []destination, err error) {
 	rawDestinations := ""
 	for i := range serviceEntries {
 		if dst, ok := serviceEntries[i].Service.Meta["gateway_destinations"]; ok {
@@ -103,11 +107,12 @@ func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destination
 	for i := range rawDestinationList {
 		match := re.FindStringSubmatch(rawDestinationList[i])
 		if len(match) < 2 {
-			continue
+			log.Println("Failed to match: ", rawDestinationList[i])
+			return destinations, errors.New("Error, failed to extract destinations")
 		}
 		destinations = append(destinations, destination{raw: match[0], datacenter: match[1], service: match[2]})
 	}
-	return destinations
+	return destinations, nil
 }
 
 // getServicePort return the first port found in the service or 80
