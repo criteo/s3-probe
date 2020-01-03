@@ -50,7 +50,7 @@ func TestExtractDestinations(t *testing.T) {
 	dummyDestinations := []destination{dst1, dst2}
 	entries := getTestServiceEntries()
 	entries[0].Service.Meta["gateway_destinations"] = "us-west-1:foobar;us-east-2:barfoo"
-	destinations := extractDestinations(entries)
+	destinations, _ := extractDestinations(entries)
 	sort.SliceStable(destinations, func(i, j int) bool {
 		return destinations[i].service < destinations[j].service
 	})
@@ -58,5 +58,31 @@ func TestExtractDestinations(t *testing.T) {
 	log.Println(dummyDestinations, destinations)
 	if !reflect.DeepEqual(dummyDestinations, destinations) {
 		t.Errorf("Failed to generate URL from proxy_address data")
+	}
+}
+
+func TestGenerateEndointFailIfConsulServiceEmpty(t *testing.T) {
+	entries := []*consul_api.ServiceEntry{}
+	_, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
+	if err == nil {
+		t.Errorf("GenerateEndpoint should fail when given empty service")
+	}
+}
+
+func TestExtractDestinationsFailIfWronglyFormatted(t *testing.T) {
+	entries := getTestServiceEntries()
+	entries[0].Service.Meta["gateway_destinations"] = "us-west-1foobar;us-east-2:barfoo"
+	_, err := extractDestinations(entries)
+
+	if err == nil {
+		t.Errorf("Extract destination didn't fail on poorly formated destinations")
+	}
+}
+
+func TestGetDatacenterFailIfConsulServiceEmpty(t *testing.T) {
+	entries := []*consul_api.ServiceEntry{}
+	_, err := getDatacenter(entries)
+	if err == nil {
+		t.Errorf("GetDatacenter should return an error when called with empty service")
 	}
 }
