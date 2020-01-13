@@ -22,6 +22,12 @@ var s3LatencySummary = promauto.NewSummaryVec(prometheus.SummaryOpts{
 	Help: "Latency for operation on the S3 endpoint",
 }, []string{"operation", "endpoint"})
 
+var s3LatencyHistogram = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "s3_latency_histogram",
+	Help:    "Latency for operation on the S3 endpoint",
+	Buckets: []float64{.001, .0025, .005, .010, .015, .020, .025, .030, .040, .050, .060, .075, .100, .250, .500, 1, 2.5, 5, 10},
+}, []string{"operation", "endpoint"})
+
 var s3TotalCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "s3_request_total",
 	Help: "Total number of requests on S3 endpoint",
@@ -272,6 +278,7 @@ func (p *Probe) mesureOperation(operationName string, operation func() error) er
 	err := operation()
 
 	s3TotalCounter.WithLabelValues(operationName, p.name).Inc()
+	s3LatencyHistogram.WithLabelValues(operationName, p.name).Observe(time.Since(start).Seconds())
 	s3LatencySummary.WithLabelValues(operationName, p.name).Observe(time.Since(start).Seconds())
 
 	if err != nil {
