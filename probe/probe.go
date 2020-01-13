@@ -204,8 +204,17 @@ func (p *Probe) performLatencyChecks() error {
 	}
 
 	operation = func() error {
-		_, err := p.endpoint.s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
-		return err
+		obj, err := p.endpoint.s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
+		// Read data by chunks of 512 bytes
+		data := make([]byte, 512)
+		for {
+			_, err = obj.Read(data)
+			if err == io.EOF {
+				return nil
+			} else if err != nil {
+				return err
+			}
+		}
 	}
 	if err := p.mesureOperation("get_object", operation); err != nil {
 		return err
