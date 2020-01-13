@@ -6,6 +6,7 @@ import (
 	"github.com/criteo/s3-probe/config"
 	"github.com/criteo/s3-probe/watcher"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	_ "net/http/pprof"
 )
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
