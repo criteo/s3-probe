@@ -72,19 +72,20 @@ const millisecondInMinute = 60_000
 
 // Probe is a S3 probe
 type Probe struct {
-	name                 string
-	gateway              bool
-	endpoint             s3endpoint
-	secretKey            string
-	accessKey            string
-	latencyBucketName    string
-	durabilityBucketName string
-	gatewayBucketName    string
-	probeRatePerMin      int
-	durabilityItemSize   int
-	durabilityItemTotal  int
-	gatewayEndpoints     []s3endpoint
-	controlChan          chan bool
+	name                      string
+	gateway                   bool
+	endpoint                  s3endpoint
+	secretKey                 string
+	accessKey                 string
+	latencyBucketName         string
+	durabilityBucketName      string
+	gatewayBucketName         string
+	probeRatePerMin           int
+	durabilityProbeRatePerMin int
+	durabilityItemSize        int
+	durabilityItemTotal       int
+	gatewayEndpoints          []s3endpoint
+	controlChan               chan bool
 }
 
 type s3endpoint struct {
@@ -101,19 +102,20 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []s3endpoint,
 
 	log.Println("Probe created for:", endpoint)
 	return Probe{
-		name:                 service.Name,
-		gateway:              service.Gateway,
-		endpoint:             s3endpoint{name: endpoint, s3Client: minioClient},
-		secretKey:            *cfg.SecretKey,
-		accessKey:            *cfg.AccessKey,
-		latencyBucketName:    *cfg.LatencyBucketName,
-		durabilityBucketName: *cfg.DurabilityBucketName,
-		gatewayBucketName:    *cfg.GatewayBucketName,
-		probeRatePerMin:      *cfg.ProbeRatePerMin,
-		durabilityItemSize:   *cfg.DurabilityItemSize,
-		durabilityItemTotal:  *cfg.DurabilityItemTotal,
-		controlChan:          controlChan,
-		gatewayEndpoints:     gatewayEndpoints,
+		name:                      service.Name,
+		gateway:                   service.Gateway,
+		endpoint:                  s3endpoint{name: endpoint, s3Client: minioClient},
+		secretKey:                 *cfg.SecretKey,
+		accessKey:                 *cfg.AccessKey,
+		latencyBucketName:         *cfg.LatencyBucketName,
+		durabilityBucketName:      *cfg.DurabilityBucketName,
+		gatewayBucketName:         *cfg.GatewayBucketName,
+		probeRatePerMin:           *cfg.ProbeRatePerMin,
+		durabilityProbeRatePerMin: *cfg.DurabilityProbeRatePerMin,
+		durabilityItemSize:        *cfg.DurabilityItemSize,
+		durabilityItemTotal:       *cfg.DurabilityItemTotal,
+		controlChan:               controlChan,
+		gatewayEndpoints:          gatewayEndpoints,
 	}, nil
 }
 
@@ -154,18 +156,26 @@ func (p *Probe) StartProbing() error {
 		}
 	}
 
+	tickerProbe := time.NewTicker(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond)
+	tickerDurabilityProbe := time.NewTicker(time.Duration(millisecondInMinute/p.durabilityProbeRatePerMin) * time.Millisecond)
+
 	for {
 		select {
 		// If we receive something on the control chan we terminate
 		// otherwise we continue to perform checks
 		case <-p.controlChan:
 			log.Println("Terminating probe on", p.name)
+			tickerProbe.Stop()
+			tickerDurabilityProbe.Stop()
 			return nil
-		case <-time.After(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond):
+		case <-tickerProbe.C:
 			if p.gateway {
 				go p.performGatewayChecks()
 			} else {
 				go p.performLatencyChecks()
+			}
+		case <-tickerDurabilityProbe.C:
+			if !p.gateway {
 				go p.performDurabilityChecks()
 			}
 		}
