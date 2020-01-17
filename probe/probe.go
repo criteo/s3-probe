@@ -133,6 +133,26 @@ func newMinioClientFromEndpoint(endpoint string, accessKey string, secretKey str
 	return minio.New(endpoint, accessKey, secretKey, secure)
 }
 
+type timer struct {
+	C      <-chan time.Time
+	Ticker *time.Ticker
+}
+
+func newTimer(rate int) timer {
+	if rate == 0 {
+		fakeTimer := make(chan time.Time)
+		return timer{C: fakeTimer, Ticker: nil}
+	}
+	ticker := time.NewTicker(time.Duration(millisecondInMinute/rate) * time.Millisecond)
+	return timer{Ticker: ticker, C: ticker.C}
+}
+
+func (t *timer) Stop() {
+	if t.Ticker != nil {
+		t.Ticker.Stop()
+	}
+}
+
 // StartProbing start to probe the S3 endpoint
 func (p *Probe) StartProbing() error {
 	log.Println("Starting probing")
@@ -156,17 +176,8 @@ func (p *Probe) StartProbing() error {
 		}
 	}
 
-	var tickerProbe, tickerDurabilityProbe *time.Ticker
-	if p.probeRatePerMin == 0 {
-		tickerProbe = time.NewTicker(time.Hour * 999999)
-	} else {
-		tickerProbe = time.NewTicker(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond)
-	}
-	if p.durabilityProbeRatePerMin == 0 {
-		tickerDurabilityProbe = time.NewTicker(time.Hour * 999999)
-	} else {
-		tickerDurabilityProbe = time.NewTicker(time.Duration(millisecondInMinute/p.durabilityProbeRatePerMin) * time.Millisecond)
-	}
+	tickerProbe := newTimer(p.probeRatePerMin)
+	tickerDurabilityProbe := newTimer(p.durabilityProbeRatePerMin)
 
 	for {
 		select {
