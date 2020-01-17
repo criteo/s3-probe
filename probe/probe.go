@@ -156,8 +156,17 @@ func (p *Probe) StartProbing() error {
 		}
 	}
 
-	tickerProbe := time.NewTicker(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond)
-	tickerDurabilityProbe := time.NewTicker(time.Duration(millisecondInMinute/p.durabilityProbeRatePerMin) * time.Millisecond)
+	var tickerProbe, tickerDurabilityProbe *time.Ticker
+	if p.probeRatePerMin == 0 {
+		tickerProbe = time.NewTicker(time.Hour * 999999)
+	} else {
+		tickerProbe = time.NewTicker(time.Duration(millisecondInMinute/p.probeRatePerMin) * time.Millisecond)
+	}
+	if p.durabilityProbeRatePerMin == 0 {
+		tickerDurabilityProbe = time.NewTicker(time.Hour * 999999)
+	} else {
+		tickerDurabilityProbe = time.NewTicker(time.Duration(millisecondInMinute/p.durabilityProbeRatePerMin) * time.Millisecond)
+	}
 
 	for {
 		select {
