@@ -153,3 +153,12 @@ func TestPerformGatewayCheckSuccess(t *testing.T) {
 		t.Errorf("Probe check is failing: %s", err)
 	}
 }
+
+func TestTimerReturnAFakeTimer(t *testing.T) {
+	ticker := newTimer(0)
+	if ticker.Ticker != nil {
+		t.Errorf("Fake ticker doesn't work")
+	}
+
+	ticker.Stop()
+}
