@@ -39,7 +39,7 @@ func TestGetWatchedServicesReturnTheCorrectEntries(t *testing.T) {
 		s3Pools: pools,
 	}
 	services := w.getWatchedServices()
-	sort.SliceStable(testServices, func(i, j int) bool {
+	sort.SliceStable(services, func(i, j int) bool {
 		return testServices[i].Name < testServices[j].Name
 	})
 	fmt.Println(testServices, services)
