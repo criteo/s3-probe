@@ -21,6 +21,7 @@ type Config struct {
 	SecretKey                 *string
 	ProbeRatePerMin           *int
 	DurabilityProbeRatePerMin *int
+	LatencyItemSize           *int
 	DurabilityItemSize        *int
 	DurabilityItemTotal       *int
 }
@@ -42,7 +43,8 @@ func ParseConfig() Config {
 		SecretKey:                 flag.String("s3-secret-key", "", "Access key of the S3 endpoint"),
 		ProbeRatePerMin:           flag.Int("probe-rate", 120, "Rate of probing per minute (how many checks are done in a minute)"),
 		DurabilityProbeRatePerMin: flag.Int("durability-probe-rate", 1, "Rate of probing per minute (how many checks are done in a minute)"),
-		DurabilityItemSize:        flag.Int("item-size", 1024*10, "Size of the item to insert into S3 for durability testing"),
+		DurabilityItemSize:        flag.Int("durability-item-size", 1024*10, "Size of the item to insert into S3 for durability testing"),
+		LatencyItemSize:           flag.Int("latency-item-size", 1024*10, "Size of the item to insert into S3 for latency testing"),
 		DurabilityItemTotal:       flag.Int("item-total", 100000, "Total number of items to write into S3 for durabbility testing"),
 	}
 
@@ -58,6 +60,7 @@ func GetTestConfig() Config {
 	durabilityBucketName := "monitoring-durab-test"
 	probeRatePerMin := 120
 	durabilityProbeRatePerMin := 1
+	latencyItemSize := 10
 	durabilityItemSize := 10
 	durabilityItemTotal := 10
 	interval := time.Duration(1)
@@ -74,6 +77,7 @@ func GetTestConfig() Config {
 		Addr:                      &dummyValue,
 		ProbeRatePerMin:           &probeRatePerMin,
 		DurabilityProbeRatePerMin: &durabilityProbeRatePerMin,
+		LatencyItemSize:           &latencyItemSize,
 		DurabilityItemSize:        &durabilityItemSize,
 		DurabilityItemTotal:       &durabilityItemTotal,
 
