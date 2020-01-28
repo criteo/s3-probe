@@ -30,7 +30,7 @@ func ParseConfig() Config {
 	config := Config{
 		ConsulAddr: flag.String("consul", "localhost:8500", "Consul server address"),
 		Tag:        flag.String("tag", "s3", "Tag to search on consul"),
-		GatewayTag: flag.String("GatewayTag", "s3-gateway", "Tag to search on consul"),
+		GatewayTag: flag.String("gateway-tag", "s3-gateway", "Tag to search on consul"),
 		EndpointSuffix: flag.String("suffix", ".service.{dc}.foo.bar",
 			"Suffix to add after the consul service name to create a valid domain name"),
 		LatencyBucketName:         flag.String("latency-bucket", "monitoring-latency", "Bucket used for the latency monitoring probe (will read and write)"),
