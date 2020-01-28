@@ -40,7 +40,7 @@ func TestGetWatchedServicesReturnTheCorrectEntries(t *testing.T) {
 	}
 	services := w.getWatchedServices()
 	sort.SliceStable(services, func(i, j int) bool {
-		return testServices[i].Name < testServices[j].Name
+		return services[i].Name < services[j].Name
 	})
 	fmt.Println(testServices, services)
 	if !reflect.DeepEqual(testServices, services) {
