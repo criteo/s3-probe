@@ -82,6 +82,7 @@ type Probe struct {
 	gatewayBucketName         string
 	probeRatePerMin           int
 	durabilityProbeRatePerMin int
+	latencyItemSize           int
 	durabilityItemSize        int
 	durabilityItemTotal       int
 	gatewayEndpoints          []s3endpoint
@@ -112,6 +113,7 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []s3endpoint,
 		gatewayBucketName:         *cfg.GatewayBucketName,
 		probeRatePerMin:           *cfg.ProbeRatePerMin,
 		durabilityProbeRatePerMin: *cfg.DurabilityProbeRatePerMin,
+		latencyItemSize:           *cfg.LatencyItemSize,
 		durabilityItemSize:        *cfg.DurabilityItemSize,
 		durabilityItemTotal:       *cfg.DurabilityItemTotal,
 		controlChan:               controlChan,
@@ -220,7 +222,7 @@ func (p *Probe) performDurabilityChecks() error {
 
 func (p *Probe) performLatencyChecks() error {
 	objectName, _ := randomHex(20)
-	objectSize := int64(1024)
+	objectSize := int64(p.latencyItemSize)
 
 	operation := func() error {
 		_, err := p.endpoint.s3Client.ListBuckets()
@@ -242,8 +244,7 @@ func (p *Probe) performLatencyChecks() error {
 	operation = func() error {
 		obj, err := p.endpoint.s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
 		defer obj.Close()
-		// Read data by chunks of 1024 bytes
-		data := make([]byte, 1024)
+		data := make([]byte, p.latencyItemSize)
 		for {
 			_, err = obj.Read(data)
 			if err == io.EOF {
