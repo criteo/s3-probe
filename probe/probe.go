@@ -179,7 +179,6 @@ func (p *Probe) PrepareProbing() error {
 	return nil
 }
 
-
 // StartProbing start to probe the S3 endpoint
 func (p *Probe) StartProbing() error {
 	log.Println("Starting probing")
@@ -335,18 +334,48 @@ func (p *Probe) mesureOperation(operationName string, operation func() error) er
 	return nil
 }
 
+func (p *Probe) checkDurabilityBucketHasEnoughObject() (bool, error) {
+	var countObj = 0
+	// Create a done channel to control 'ListObjectsV2' go routine.
+	doneCh := make(chan struct{})
+
+	// Indicate to our routine to exit cleanly upon return.
+	defer close(doneCh)
+
+	objectCh := p.endpoint.s3Client.ListObjectsV2(p.durabilityBucketName, "", false, doneCh)
+	for object := range objectCh {
+		if object.Err != nil {
+			return false, object.Err
+		}
+		countObj += 1
+	}
+
+	if countObj >= p.durabilityItemTotal {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (p *Probe) prepareDurabilityBucket() error {
 	log.Printf("Checking if durability bucket is present on %s", p.name)
 	exists, errBucketExists := p.endpoint.s3Client.BucketExists(p.durabilityBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
 	}
+
 	if exists {
-		return nil
-	}
-	err := p.endpoint.s3Client.MakeBucket(p.durabilityBucketName, "")
-	if err != nil {
-		return err
+		hasEnoughObjects, err := p.checkDurabilityBucketHasEnoughObject()
+		if err != nil {
+			return err
+		}
+		if hasEnoughObjects {
+			return nil
+		}
+	} else {
+		err := p.endpoint.s3Client.MakeBucket(p.durabilityBucketName, "")
+		if err != nil {
+			return err
+		}
 	}
 
 	log.Println("Preparing durability bucket")
