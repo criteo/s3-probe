@@ -57,13 +57,21 @@ func (w *Watcher) createNewProbes(servicesToAdd []probe.S3Service) {
 	for i := range servicesToAdd {
 		log.Printf("Creating new probe for: %s, gateway: %t", servicesToAdd[i].Name, servicesToAdd[i].Gateway)
 		probeChan = make(chan bool)
-		w.s3Pools[servicesToAdd[i].Name] = probeChan
 		p, err := probe.NewProbeFromConsul(servicesToAdd[i], w.cfg, *w.consulClient, probeChan)
 
 		if err != nil {
 			log.Println("Error while creating probe:", err)
 			continue
 		}
+
+		err = p.PrepareProbing()
+		if err != nil {
+			log.Println("Error while preparing probe:", err)
+			close(probeChan)
+			continue
+		}
+
+		w.s3Pools[servicesToAdd[i].Name] = probeChan
 		go p.StartProbing()
 	}
 }
@@ -75,6 +83,7 @@ func (w *Watcher) flushOldProbes(servicesToRemove []probe.S3Service) {
 		log.Printf("Removing old probe for: %s", servicesToRemove[i].Name)
 		probeChan, ok = w.s3Pools[servicesToRemove[i].Name]
 		if ok {
+			delete(w.s3Pools, servicesToRemove[i].Name);
 			probeChan <- false
 			close(probeChan)
 		}

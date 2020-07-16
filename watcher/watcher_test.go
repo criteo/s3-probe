@@ -2,6 +2,8 @@ package watcher
 
 import (
 	"fmt"
+	"github.com/smartystreets/assertions/assert"
+	"github.com/smartystreets/assertions/should"
 	"reflect"
 	"sort"
 	"testing"
@@ -95,5 +97,9 @@ func TestFlushOldProbesSendStopCommand(t *testing.T) {
 	w.flushOldProbes(s3ServicesFromStrings([]string{"test"}))
 	if len(controlChan) != 1 {
 		t.Errorf("Stop command not received")
+	}
+	result := assert.So(pools, should.NotContainKey, "test")
+	if result.Failed() {
+		t.Errorf("The assertion failed: %s", result)
 	}
 }

@@ -155,9 +155,8 @@ func (t *timer) Stop() {
 	}
 }
 
-// StartProbing start to probe the S3 endpoint
-func (p *Probe) StartProbing() error {
-	log.Println("Starting probing")
+func (p *Probe) PrepareProbing() error {
+	log.Println("Prepare probing")
 
 	if p.gateway {
 		err := p.prepareGatewayBucket()
@@ -177,6 +176,13 @@ func (p *Probe) StartProbing() error {
 			return err
 		}
 	}
+	return nil
+}
+
+
+// StartProbing start to probe the S3 endpoint
+func (p *Probe) StartProbing() error {
+	log.Println("Starting probing")
 
 	tickerProbe := newTimer(p.probeRatePerMin)
 	tickerDurabilityProbe := newTimer(p.durabilityProbeRatePerMin)

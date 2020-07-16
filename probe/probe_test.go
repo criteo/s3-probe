@@ -78,12 +78,12 @@ func TestDurabilityLatencyCheckSuccess(t *testing.T) {
 	}
 }
 
-func TestStartProbingProperlyTerminate(t *testing.T) {
+func TestPrepareProbingProperlyTerminate(t *testing.T) {
 	probe, _ := getTestProbe()
 	suffix, _ := randomHex(8)
 	bucket := probe.latencyBucketName
 	probe.latencyBucketName = "/./??.."
-	err := probe.StartProbing()
+	err := probe.PrepareProbing()
 	if err == nil {
 		t.Errorf("Preparation errors are not properly handled: %s", err)
 	}
@@ -92,7 +92,7 @@ func TestStartProbingProperlyTerminate(t *testing.T) {
 
 	controlChan <- false
 
-	err = probe.StartProbing()
+	err = probe.PrepareProbing()
 	if err != nil {
 		t.Errorf("Probing is failing: %s", err)
 	}
