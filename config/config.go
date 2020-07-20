@@ -45,7 +45,7 @@ func ParseConfig() Config {
 		DurabilityProbeRatePerMin: flag.Int("durability-probe-rate", 1, "Rate of probing per minute (how many checks are done in a minute)"),
 		DurabilityItemSize:        flag.Int("durability-item-size", 1024*10, "Size of the item to insert into S3 for durability testing"),
 		LatencyItemSize:           flag.Int("latency-item-size", 1024*10, "Size of the item to insert into S3 for latency testing"),
-		DurabilityItemTotal:       flag.Int("item-total", 100000, "Total number of items to write into S3 for durabbility testing"),
+		DurabilityItemTotal:       flag.Int("item-total", 100000, "Total number of items to write into S3 for durability testing"),
 	}
 
 	flag.Parse()
