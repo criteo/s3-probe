@@ -425,7 +425,7 @@ func (p *Probe) prepareLatencyBucket() error {
 func (p *Probe) prepareGatewayBucket() error {
 	log.Printf("Checking if gateway buckets are present on %s", p.name)
 	if len(p.gatewayEndpoints) == 0 {
-		return errors.New("Couldn't find any geteway destinations")
+		return errors.New("Couldn't find any gateway destinations")
 	}
 	for i := range p.gatewayEndpoints {
 		exists, errBucketExists := p.gatewayEndpoints[i].s3Client.BucketExists(p.gatewayBucketName)
@@ -433,7 +433,7 @@ func (p *Probe) prepareGatewayBucket() error {
 			return errBucketExists
 		}
 		if exists {
-			return nil
+			continue
 		}
 		log.Printf("Preparing gateway bucket on %s", p.gatewayEndpoints[i].name)
 		probeGatewayBucketAttempt.WithLabelValues(p.name, p.gatewayEndpoints[i].name).Inc()
