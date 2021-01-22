@@ -2,11 +2,12 @@ package watcher
 
 import (
 	"fmt"
-	"github.com/smartystreets/assertions/assert"
-	"github.com/smartystreets/assertions/should"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/smartystreets/assertions/assert"
+	"github.com/smartystreets/assertions/should"
 
 	"github.com/criteo/s3-probe/config"
 	"github.com/criteo/s3-probe/probe"
@@ -81,6 +82,26 @@ func TestGetServicesToModifyHandleLastFromWatched(t *testing.T) {
 	if !reflect.DeepEqual(expectedToRemove, serviceToRemove) {
 		fmt.Println(expectedToRemove, serviceToRemove)
 		t.Errorf("return values to remove are not the one expected")
+	}
+}
+
+func TestGetServicesToModifyHandleChangeOfEndpoint(t *testing.T) {
+	servicesFromConsul := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.1"}}
+	servicesWatchedServices := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.2"}}
+	w := Watcher{}
+	serviceToAdd, serviceToRemove := w.getServicesToModify(servicesFromConsul, servicesWatchedServices)
+	if len(serviceToAdd) != 1 || len(serviceToRemove) != 1 {
+		t.Errorf("getServicesToModify should have return s1 service in both serviceToRemove and serviceToAdd")
+	}
+}
+
+func TestGetServicesToModifyHandleChangeOfGatewayReadEndpoint(t *testing.T) {
+	servicesFromConsul := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.1", GatewayReadEnpoints: []probe.S3Endpoint{{Name: "10.0.0.2"}, {Name: "10.0.0.3"}}}}
+	servicesWatchedServices := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.1", GatewayReadEnpoints: []probe.S3Endpoint{{Name: "10.0.0.3"}}}}
+	w := Watcher{}
+	serviceToAdd, serviceToRemove := w.getServicesToModify(servicesFromConsul, servicesWatchedServices)
+	if len(serviceToAdd) != 1 || len(serviceToRemove) != 1 {
+		t.Errorf("getServicesToModify should have return s1 service in both serviceToRemove and serviceToAdd")
 	}
 }
 

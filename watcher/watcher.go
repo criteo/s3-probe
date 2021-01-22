@@ -83,7 +83,7 @@ func (w *Watcher) flushOldProbes(servicesToRemove []probe.S3Service) {
 		log.Printf("Removing old probe for: %s", servicesToRemove[i].Name)
 		probeChan, ok = w.s3Pools[servicesToRemove[i].Name]
 		if ok {
-			delete(w.s3Pools, servicesToRemove[i].Name);
+			delete(w.s3Pools, servicesToRemove[i].Name)
 			probeChan <- false
 			close(probeChan)
 		}
@@ -108,37 +108,19 @@ func (w *Watcher) getWatchedServices() []probe.S3Service {
 }
 
 func (w *Watcher) getServices() []probe.S3Service {
-	catalog := w.consulClient.Catalog()
-	services, _, _ := catalog.Services(nil)
-
-	var s3Services []probe.S3Service
-	var service probe.S3Service
-	for serviceName := range services {
-		for i := range services[serviceName] {
-			if services[serviceName][i] == w.consulGatewayTag {
-				service = probe.S3Service{Name: serviceName, Gateway: true}
-				s3Services = append(s3Services, service)
-				break
-			}
-			if services[serviceName][i] == w.consulTag {
-				service = probe.S3Service{Name: serviceName, Gateway: false}
-				s3Services = append(s3Services, service)
-				break
-			}
-		}
-	}
-	return s3Services
+	return probe.GetS3Services(w.cfg, *w.consulClient, w.consulTag, w.consulGatewayTag)
 }
 
-// getDiff return the elements from mainSlice that are not in subSlice
+// getDiff return the elements from mainSlice that are not in subSlice or that have differences
 func getSliceDiff(mainSlice []probe.S3Service, subSlice []probe.S3Service) []probe.S3Service {
-	mainIndex := make(map[string]bool)
+	mainIndex := make(map[string]*probe.S3Service)
 	var result []probe.S3Service
 	for i := range mainSlice {
-		mainIndex[mainSlice[i].Name] = true
+		mainIndex[mainSlice[i].Name] = &mainSlice[i]
 	}
 	for i := range subSlice {
-		if !mainIndex[subSlice[i].Name] {
+		service, found := mainIndex[subSlice[i].Name]
+		if !found || !service.Equals(&subSlice[i]) {
 			result = append(result, subSlice[i])
 		}
 	}
