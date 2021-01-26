@@ -74,7 +74,7 @@ const millisecondInMinute = 60_000
 type Probe struct {
 	name                      string
 	gateway                   bool
-	endpoint                  s3endpoint
+	endpoint                  S3Endpoint
 	secretKey                 string
 	accessKey                 string
 	latencyBucketName         string
@@ -85,17 +85,17 @@ type Probe struct {
 	latencyItemSize           int
 	durabilityItemSize        int
 	durabilityItemTotal       int
-	gatewayEndpoints          []s3endpoint
+	gatewayEndpoints          []S3Endpoint
 	controlChan               chan bool
 }
 
-type s3endpoint struct {
-	name     string
+type S3Endpoint struct {
+	Name     string
 	s3Client *minio.Client
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(service S3Service, endpoint string, gatewayEndpoints []s3endpoint, cfg config.Config, controlChan chan bool) (Probe, error) {
+func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint, cfg config.Config, controlChan chan bool) (Probe, error) {
 	minioClient, err := newMinioClientFromEndpoint(endpoint, *cfg.AccessKey, *cfg.SecretKey)
 	if err != nil {
 		return Probe{}, err
@@ -105,7 +105,7 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []s3endpoint,
 	return Probe{
 		name:                      service.Name,
 		gateway:                   service.Gateway,
-		endpoint:                  s3endpoint{name: endpoint, s3Client: minioClient},
+		endpoint:                  S3Endpoint{Name: endpoint, s3Client: minioClient},
 		secretKey:                 *cfg.SecretKey,
 		accessKey:                 *cfg.AccessKey,
 		latencyBucketName:         *cfg.LatencyBucketName,
@@ -289,7 +289,7 @@ func (p *Probe) performGatewayChecks() error {
 	var operationName string
 	for i := range p.gatewayEndpoints {
 		operationName = "gateway_get_object"
-		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
+		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
@@ -301,17 +301,17 @@ func (p *Probe) performGatewayChecks() error {
 		if err != io.EOF {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {
-			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
+			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		}
 		obj.Close()
 
 		operationName = "gateway_remove_object"
-		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
+		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		err = p.gatewayEndpoints[i].s3Client.RemoveObject(p.gatewayBucketName, objectName)
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {
-			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].name).Inc()
+			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		}
 	}
 
@@ -435,8 +435,8 @@ func (p *Probe) prepareGatewayBucket() error {
 		if exists {
 			continue
 		}
-		log.Printf("Preparing gateway bucket on %s", p.gatewayEndpoints[i].name)
-		probeGatewayBucketAttempt.WithLabelValues(p.name, p.gatewayEndpoints[i].name).Inc()
+		log.Printf("Preparing gateway bucket on %s", p.gatewayEndpoints[i].Name)
+		probeGatewayBucketAttempt.WithLabelValues(p.name, p.gatewayEndpoints[i].Name).Inc()
 
 		err := p.gatewayEndpoints[i].s3Client.MakeBucket(p.gatewayBucketName, "")
 		if err != nil {

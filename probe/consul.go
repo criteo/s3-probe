@@ -27,7 +27,7 @@ func NewProbeFromConsul(service S3Service, cfg config.Config, consulClient consu
 		log.Println("Could not generate endpoint from consul:", err)
 		return Probe{}, err
 	}
-	var readEndpoints []s3endpoint
+	var readEndpoints []S3Endpoint
 	if service.Gateway {
 		readEndpoints, err = extractGatewayEndoints(serviceEntries, cfg, consulClient)
 		if err != nil {
@@ -54,8 +54,8 @@ func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []
 	return endpoint, nil
 }
 
-func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) ([]s3endpoint, error) {
-	s3endpoints := []s3endpoint{}
+func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) ([]S3Endpoint, error) {
+	s3endpoints := []S3Endpoint{}
 
 	destinations, err := extractDestinations(serviceEntries)
 	if err != nil {
@@ -78,9 +78,9 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg confi
 		minioClient, err := newMinioClientFromEndpoint(endpointName, *cfg.AccessKey, *cfg.SecretKey)
 		if err != nil {
 			log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destinations[i].raw, destinations[i].datacenter, destinations[i].service, err)
-			return []s3endpoint{}, err
+			return []S3Endpoint{}, err
 		}
-		s3endpoints = append(s3endpoints, s3endpoint{name: endpointName, s3Client: minioClient})
+		s3endpoints = append(s3endpoints, S3Endpoint{Name: endpointName, s3Client: minioClient})
 		log.Printf("Added gateway destination: %s", endpointName)
 	}
 	return s3endpoints, nil
