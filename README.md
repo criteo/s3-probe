@@ -16,6 +16,8 @@ The probe will the write an object on the gateway and try to read it from all th
 
 # Build
 
+go 1.13 or above is required.
+
 `GOOS=linux go build .`
 
 # Docker build
