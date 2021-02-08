@@ -43,7 +43,7 @@ func TestGetServiceFailureToListServices(t *testing.T) {
 	consulClient.RegisteredServicesError = errors.New("failure")
 
 	cfg := config.GetTestConfig()
-	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, watchedServices: map[string]watchedService{}}
 
 	serviceDiscoveryErrorCounter.Reset()
 	services := watcher.getServices()
@@ -65,7 +65,7 @@ func TestGetServiceFailureToGetEndPoints(t *testing.T) {
 	consulClient.ServiceEndPointsError = errors.New("failure")
 
 	cfg := config.GetTestConfig()
-	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, watchedServices: map[string]watchedService{}}
 
 	serviceDiscoveryErrorCounter.Reset()
 	services := watcher.getServices()
@@ -95,7 +95,7 @@ func TestGetService(t *testing.T) {
 	consulClient.ReadEndPoints = map[string][]probe.S3Endpoint{"myotherservice": {probe.S3Endpoint{Name: "10.0.0.1"}, probe.S3Endpoint{Name: "10.0.0.2"}}}
 
 	cfg := config.GetTestConfig()
-	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, watchedServices: map[string]watchedService{}}
 
 	serviceDiscoveryErrorCounter.Reset()
 	services := watcher.getServices()
@@ -138,12 +138,12 @@ func s3ServicesFromStrings(strings []string) (s3Services []probe.S3Service) {
 func TestGetWatchedServicesReturnTheCorrectEntries(t *testing.T) {
 	testValues := []string{"test1", "test2", "test3"}
 	testServices := s3ServicesFromStrings(testValues)
-	pools := make(map[string](chan bool))
-	for i := range testValues {
-		pools[testValues[i]] = nil
+	watchedServices := map[string]watchedService{}
+	for _, serviceName := range testValues {
+		watchedServices[serviceName] = watchedService{service: probe.S3Service{Name: serviceName}}
 	}
 	w := Watcher{
-		s3Pools: pools,
+		watchedServices: watchedServices,
 	}
 	services := w.getWatchedServices()
 	sort.SliceStable(services, func(i, j int) bool {
@@ -209,12 +209,20 @@ func TestGetServicesToModifyHandleChangeOfGatewayReadEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetServicesToModifyReturnsEmptyWhenNoChange(t *testing.T) {
+	servicesFromConsul := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.1", GatewayReadEnpoints: []probe.S3Endpoint{{Name: "10.0.0.2"}, {Name: "10.0.0.3"}}}}
+	servicesWatchedServices := []probe.S3Service{{Name: "s1", Endpoint: "10.0.0.1", GatewayReadEnpoints: []probe.S3Endpoint{{Name: "10.0.0.2"}, {Name: "10.0.0.3"}}}}
+	w := Watcher{}
+	serviceToAdd, serviceToRemove := w.getServicesToModify(servicesFromConsul, servicesWatchedServices)
+	if len(serviceToAdd) != 0 || len(serviceToRemove) != 0 {
+		t.Errorf("getServicesToModify shouldn't have returned serviceToRemove and serviceToAdd")
+	}
+}
+
 func TestFlushOldProbesSendStopCommand(t *testing.T) {
 	controlChan := make(chan bool, 1)
-	pools := make(map[string](chan bool))
-	pools["test"] = controlChan
 	w := Watcher{
-		s3Pools: pools,
+		watchedServices: map[string]watchedService{"test": {service: probe.S3Service{Name: "test"}, probeChan: controlChan}},
 	}
 	if len(controlChan) != 0 {
 		t.Errorf("Chan not empty by default")
@@ -223,7 +231,7 @@ func TestFlushOldProbesSendStopCommand(t *testing.T) {
 	if len(controlChan) != 1 {
 		t.Errorf("Stop command not received")
 	}
-	result := assert.So(pools, should.NotContainKey, "test")
+	result := assert.So(w.watchedServices, should.NotContainKey, "test")
 	if result.Failed() {
 		t.Errorf("The assertion failed: %s", result)
 	}
