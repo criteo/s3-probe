@@ -9,6 +9,40 @@ import (
 	consul_api "github.com/hashicorp/consul/api"
 )
 
+func TestS3ServiceEquals(t *testing.T) {
+	service := S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: true, GatewayReadEnpoints: []S3Endpoint{{Name: "127.0.0.2"}, {Name: "127.0.0.3"}}}
+
+	otherService := S3Service{Name: "my-service", Endpoint: "127.0.0.5", Gateway: true, GatewayReadEnpoints: []S3Endpoint{{Name: "127.0.0.2"}, {Name: "127.0.0.3"}}}
+	if service.Equals(&otherService) {
+		t.Error("S3Service equality should have return false due to different endpoint")
+	}
+
+	otherService = S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: false, GatewayReadEnpoints: []S3Endpoint{}}
+	if service.Equals(&otherService) {
+		t.Error("S3Service equality should have return false due to different Gateway flage")
+	}
+
+	otherService = S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: true, GatewayReadEnpoints: []S3Endpoint{}}
+	if service.Equals(&otherService) {
+		t.Error("S3Service equality should have return false due to different list of gateway read endpoints")
+	}
+
+	otherService = S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: true, GatewayReadEnpoints: []S3Endpoint{{Name: "127.0.0.2"}}}
+	if service.Equals(&otherService) {
+		t.Error("S3Service equality should have return false due to different list of gateway read endpoints")
+	}
+
+	otherService = S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: true, GatewayReadEnpoints: []S3Endpoint{{Name: "127.0.0.3"}, {Name: "127.0.0.2"}}}
+	if service.Equals(&otherService) {
+		t.Error("S3Service equality should have return false due to different list of gateway read endpoints")
+	}
+
+	otherService = S3Service{Name: "my-service", Endpoint: "127.0.0.1", Gateway: true, GatewayReadEnpoints: []S3Endpoint{{Name: "127.0.0.2"}, {Name: "127.0.0.3"}}}
+	if !service.Equals(&otherService) {
+		t.Error("S3Service equality should have return true due to perfect deep equality between both services")
+	}
+}
+
 func getTestServiceEntries() (entries []*consul_api.ServiceEntry) {
 	dummyNode := consul_api.Node{
 		Datacenter: "us-east-1",

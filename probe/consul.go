@@ -11,6 +11,18 @@ import (
 	consul_api "github.com/hashicorp/consul/api"
 )
 
+// ConsulClient is a wrapper around true consul client to ease mocking
+type ConsulClient interface {
+	GetAllMatchingRegisteredServices() (map[string]bool, error)
+	GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error)
+}
+
+// concrete implementation
+type consulClientImpl struct {
+	cfg          *config.Config
+	consulClient *consul_api.Client
+}
+
 // S3Service describe a S3 service and associated metadata
 type S3Service struct {
 	Name                string
@@ -19,6 +31,7 @@ type S3Service struct {
 	GatewayReadEnpoints []S3Endpoint
 }
 
+// Equals checks that to S3Service description are identical
 func (s *S3Service) Equals(other *S3Service) bool {
 	if s.Name != other.Name ||
 		s.Endpoint != other.Endpoint ||
@@ -36,51 +49,71 @@ func (s *S3Service) Equals(other *S3Service) bool {
 	return true
 }
 
-// GetS3Services Discover S3 services from consul (S3 service must match given consulTag or consulGatewayTag)
-func GetS3Services(cfg config.Config, consulClient consul_api.Client, consulTag string, consulGatewayTag string) []S3Service {
-	catalog := consulClient.Catalog()
-	health := consulClient.Health()
-	services, _, _ := catalog.Services(nil)
+// MakeConsulClient builds a new ConsulClient
+func MakeConsulClient(cfg *config.Config) (ConsulClient, error) {
+	defaultConfig := consul_api.DefaultConfig()
+	defaultConfig.Address = *cfg.ConsulAddr
 
-	var s3Services []S3Service
-	var service S3Service
+	client, err := consul_api.NewClient(defaultConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &consulClientImpl{cfg: cfg, consulClient: client}, nil
+}
+
+// getAllMatchingRegisteredServices returns all registered services in consul that matched Tag or GatewayTag
+func (cc *consulClientImpl) GetAllMatchingRegisteredServices() (map[string]bool, error) {
+	catalog := cc.consulClient.Catalog()
+
+	services, _, err := catalog.Services(nil)
+	if err != nil {
+		return map[string]bool{}, err
+	}
+
+	results := map[string]bool{}
 	for serviceName := range services {
 		for i := range services[serviceName] {
-			isGateway := services[serviceName][i] == consulGatewayTag
-
-			if isGateway || services[serviceName][i] == consulTag {
-				serviceEntries, _, err := health.Service(service.Name, "", false, nil)
-				if err != nil {
-					log.Printf("Consul query failed for %s: %s", service.Name, err)
-					break
-				}
-
-				endpoint, err := getEndpointFromConsul(service.Name, *cfg.EndpointSuffix, serviceEntries)
-				if err != nil {
-					log.Printf("Resolving service endpoint failed for %s: %s", service.Name, err)
-					break
-				}
-
-				var readEndpoints []S3Endpoint
-				if isGateway {
-					readEndpoints, err = extractGatewayEndoints(serviceEntries, cfg, consulClient)
-					if err != nil {
-						log.Printf("Resolving gateway endpoints failed for %s: %s", service.Name, err)
-						break
-					}
-				}
-
-				service = S3Service{Name: serviceName, Endpoint: endpoint, Gateway: isGateway, GatewayReadEnpoints: readEndpoints}
-				s3Services = append(s3Services, service)
+			isGateway := services[serviceName][i] == *cc.cfg.GatewayTag
+			if isGateway || services[serviceName][i] == *cc.cfg.Tag {
+				results[serviceName] = isGateway
 				break
 			}
 		}
 	}
-	return s3Services
+
+	return results, nil
+}
+
+// getServiceEndPoint resolves the endpoint address of the given serviceName via consul
+func (cc *consulClientImpl) GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error) {
+	health := cc.consulClient.Health()
+	serviceEntries, _, err := health.Service(serviceName, "", false, nil)
+	if err != nil {
+		log.Printf("Fail to query health information for service %s from consul: %s\n", serviceName, err)
+		return "", []S3Endpoint{}, err
+	}
+
+	endpoint, err := getEndpointFromConsul(serviceName, *cc.cfg.EndpointSuffix, serviceEntries)
+	if err != nil {
+		log.Printf("Fail to resolve service endpoint from consul service entries for service %s: %s\n", serviceName, err)
+		return "", []S3Endpoint{}, err
+	}
+
+	if isGateway {
+		readEndpoints, err := extractGatewayEndoints(serviceEntries, cc.cfg, cc.consulClient)
+		if err != nil {
+			log.Printf("Resolving gateway endpoints failed for %s: %s", serviceName, err)
+			return "", []S3Endpoint{}, err
+		}
+		return endpoint, readEndpoints, err
+	}
+
+	return endpoint, []S3Endpoint{}, nil
 }
 
 // NewProbeFromConsul Create a new probe using consul to generate endpoint configuration
-func NewProbeFromConsul(service S3Service, cfg config.Config, consulClient consul_api.Client, controlChan chan bool) (Probe, error) {
+func NewProbeFromConsul(service S3Service, cfg *config.Config, controlChan chan bool) (Probe, error) {
 	return NewProbe(service, service.Endpoint, service.GatewayReadEnpoints, cfg, controlChan)
 }
 
@@ -101,7 +134,7 @@ func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []
 	return endpoint, nil
 }
 
-func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg config.Config, consulClient consul_api.Client) ([]S3Endpoint, error) {
+func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg *config.Config, consulClient *consul_api.Client) ([]S3Endpoint, error) {
 	s3endpoints := []S3Endpoint{}
 
 	destinations, err := extractDestinations(serviceEntries)

@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -11,24 +12,127 @@ import (
 
 	"github.com/criteo/s3-probe/config"
 	"github.com/criteo/s3-probe/probe"
+
+	io_prometheus_client "github.com/prometheus/client_model/go"
 )
+
+type consulClientMock struct {
+	RegisteredServices      map[string]bool
+	RegisteredServicesError error
+	ServiceEndPoints        map[string]string
+	ReadEndPoints           map[string][]probe.S3Endpoint
+	ServiceEndPointsError   error
+}
+
+func (cc *consulClientMock) GetAllMatchingRegisteredServices() (map[string]bool, error) {
+	if cc.RegisteredServicesError != nil {
+		return map[string]bool{}, cc.RegisteredServicesError
+	}
+	return cc.RegisteredServices, nil
+}
+
+func (cc *consulClientMock) GetServiceEndPoints(serviceName string, isGateway bool) (string, []probe.S3Endpoint, error) {
+	if cc.ServiceEndPointsError != nil {
+		return "", []probe.S3Endpoint{}, cc.ServiceEndPointsError
+	}
+	return cc.ServiceEndPoints[serviceName], cc.ReadEndPoints[serviceName], nil
+}
+
+func TestGetServiceFailureToListServices(t *testing.T) {
+	consulClient := &consulClientMock{}
+	consulClient.RegisteredServicesError = errors.New("failure")
+
+	cfg := config.GetTestConfig()
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+
+	serviceDiscoveryErrorCounter.Reset()
+	services := watcher.getServices()
+	if len(services) != 0 {
+		t.Error("GetServices should have failed")
+	}
+
+	m, _ := serviceDiscoveryErrorCounter.GetMetricWithLabelValues("N/A")
+	metric := &io_prometheus_client.Metric{}
+	m.Write(metric)
+	if *metric.Counter.Value != 1.0 {
+		t.Errorf("Expected 1.0 got %f", *metric.Counter.Value)
+	}
+}
+
+func TestGetServiceFailureToGetEndPoints(t *testing.T) {
+	consulClient := &consulClientMock{}
+	consulClient.RegisteredServices = map[string]bool{"myservice": false, "myotherservice": true}
+	consulClient.ServiceEndPointsError = errors.New("failure")
+
+	cfg := config.GetTestConfig()
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+
+	serviceDiscoveryErrorCounter.Reset()
+	services := watcher.getServices()
+	if len(services) != 0 {
+		t.Error("GetServices should have failed")
+	}
+
+	m, _ := serviceDiscoveryErrorCounter.GetMetricWithLabelValues("myservice")
+	metric := &io_prometheus_client.Metric{}
+	m.Write(metric)
+	if *metric.Counter.Value != 1.0 {
+		t.Errorf("Expected 1.0 got %f", *metric.Counter.Value)
+	}
+
+	m, _ = serviceDiscoveryErrorCounter.GetMetricWithLabelValues("myotherservice")
+	metric = &io_prometheus_client.Metric{}
+	m.Write(metric)
+	if *metric.Counter.Value != 1.0 {
+		t.Errorf("Expected 1.0 got %f", *metric.Counter.Value)
+	}
+}
+
+func TestGetService(t *testing.T) {
+	consulClient := &consulClientMock{}
+	consulClient.RegisteredServices = map[string]bool{"myservice": false, "myotherservice": true}
+	consulClient.ServiceEndPoints = map[string]string{"myservice": "127.0.0.1", "myotherservice": "127.0.0.2"}
+	consulClient.ReadEndPoints = map[string][]probe.S3Endpoint{"myotherservice": {probe.S3Endpoint{Name: "10.0.0.1"}, probe.S3Endpoint{Name: "10.0.0.2"}}}
+
+	cfg := config.GetTestConfig()
+	watcher := Watcher{consulClient: consulClient, cfg: &cfg, s3Pools: map[string](chan bool){}}
+
+	serviceDiscoveryErrorCounter.Reset()
+	services := watcher.getServices()
+	if len(services) != 2 {
+		t.Errorf("Expected 2 S3Service but got %d", len(services))
+	}
+
+	if services[0].Name != "myservice" || services[0].Endpoint != "127.0.0.1" ||
+		services[0].Gateway != false || len(services[0].GatewayReadEnpoints) != 0 {
+		t.Errorf("myservice don't match expectation")
+	}
+
+	if services[1].Name != "myotherservice" || services[1].Endpoint != "127.0.0.2" ||
+		services[1].Gateway != true || len(services[1].GatewayReadEnpoints) != 2 {
+		t.Errorf("myotherservice don't match expectation")
+	}
+
+	m, _ := serviceDiscoveryErrorCounter.GetMetricWithLabelValues("myservice")
+	metric := &io_prometheus_client.Metric{}
+	m.Write(metric)
+	if *metric.Counter.Value != 0.0 {
+		t.Errorf("Expected 0.0 got %f", *metric.Counter.Value)
+	}
+
+	m, _ = serviceDiscoveryErrorCounter.GetMetricWithLabelValues("myotherservice")
+	metric = &io_prometheus_client.Metric{}
+	m.Write(metric)
+	if *metric.Counter.Value != 0.0 {
+		t.Errorf("Expected 0.0 got %f", *metric.Counter.Value)
+	}
+}
 
 func s3ServicesFromStrings(strings []string) (s3Services []probe.S3Service) {
 	for i := range strings {
 		s3Services = append(s3Services, probe.S3Service{Name: strings[i]})
 	}
 	return s3Services
-}
-
-func TestNewWrapperCreatesWrapper(t *testing.T) {
-	tag := "randomTag"
-
-	cfg := config.GetTestConfig()
-	cfg.Tag = &tag
-	w := NewWatcher(cfg)
-	if w.consulTag != tag {
-		t.Errorf("Constructor doesn't set tag properly")
-	}
 }
 
 func TestGetWatchedServicesReturnTheCorrectEntries(t *testing.T) {

@@ -89,13 +89,14 @@ type Probe struct {
 	controlChan               chan bool
 }
 
+// S3Endpoint holds the endpoint name address and the client to connect to it
 type S3Endpoint struct {
 	Name     string
 	s3Client *minio.Client
 }
 
 // NewProbe creates a new S3 probe
-func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint, cfg config.Config, controlChan chan bool) (Probe, error) {
+func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint, cfg *config.Config, controlChan chan bool) (Probe, error) {
 	minioClient, err := newMinioClientFromEndpoint(endpoint, *cfg.AccessKey, *cfg.SecretKey)
 	if err != nil {
 		return Probe{}, err

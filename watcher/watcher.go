@@ -5,35 +5,34 @@ import (
 	"time"
 
 	"github.com/criteo/s3-probe/probe"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 
 	"github.com/criteo/s3-probe/config"
-
-	consul_api "github.com/hashicorp/consul/api"
 )
 
 // Watcher manages the pool of S3 endpoints to monitor
 type Watcher struct {
-	consulClient     *consul_api.Client
-	cfg              config.Config
-	consulTag        string
-	consulGatewayTag string
-	s3Pools          map[string](chan bool)
+	consulClient probe.ConsulClient
+	cfg          *config.Config
+	s3Pools      map[string](chan bool)
 }
+
+var serviceDiscoveryErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "s3_service_discovery_error_total",
+	Help: "Total number of service errors",
+}, []string{"service"})
 
 // NewWatcher creates a new watcher and prepare the consul client
 func NewWatcher(cfg config.Config) Watcher {
-	defaultConfig := consul_api.DefaultConfig()
-	defaultConfig.Address = *cfg.ConsulAddr
-	client, err := consul_api.NewClient(defaultConfig)
+	client, err := probe.MakeConsulClient(&cfg)
 	if err != nil {
 		panic(err)
 	}
 	return Watcher{
-		cfg:              cfg,
-		consulClient:     client,
-		consulTag:        *cfg.Tag,
-		consulGatewayTag: *cfg.GatewayTag,
-		s3Pools:          make(map[string](chan bool)),
+		cfg:          &cfg,
+		consulClient: client,
+		s3Pools:      make(map[string](chan bool)),
 	}
 }
 
@@ -57,7 +56,7 @@ func (w *Watcher) createNewProbes(servicesToAdd []probe.S3Service) {
 	for i := range servicesToAdd {
 		log.Printf("Creating new probe for: %s, gateway: %t", servicesToAdd[i].Name, servicesToAdd[i].Gateway)
 		probeChan = make(chan bool)
-		p, err := probe.NewProbeFromConsul(servicesToAdd[i], w.cfg, *w.consulClient, probeChan)
+		p, err := probe.NewProbeFromConsul(servicesToAdd[i], w.cfg, probeChan)
 
 		if err != nil {
 			log.Println("Error while creating probe:", err)
@@ -108,7 +107,27 @@ func (w *Watcher) getWatchedServices() []probe.S3Service {
 }
 
 func (w *Watcher) getServices() []probe.S3Service {
-	return probe.GetS3Services(w.cfg, *w.consulClient, w.consulTag, w.consulGatewayTag)
+	services, err := w.consulClient.GetAllMatchingRegisteredServices()
+	if err != nil {
+		serviceDiscoveryErrorCounter.WithLabelValues("N/A").Inc()
+		log.Printf("Fail to query all registered services from consul: %s\n", err)
+		return []probe.S3Service{}
+	}
+
+	results := make([]probe.S3Service, 0)
+	for serviceName, isGateway := range services {
+		endpoint, readEndpoints, err := w.consulClient.GetServiceEndPoints(serviceName, isGateway)
+		if err != nil {
+			serviceDiscoveryErrorCounter.WithLabelValues(serviceName).Inc()
+			log.Printf("Resolving service endpoints failed for %s: %s\n", serviceName, err)
+			continue
+		}
+
+		s := probe.S3Service{Name: serviceName, Endpoint: endpoint, Gateway: isGateway, GatewayReadEnpoints: readEndpoints}
+		results = append(results, s)
+	}
+
+	return results
 }
 
 // getDiff return the elements from mainSlice that are not in subSlice or that have differences
