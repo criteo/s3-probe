@@ -11,11 +11,16 @@ import (
 	"github.com/criteo/s3-probe/config"
 )
 
+type watchedService struct {
+	service   probe.S3Service
+	probeChan chan bool
+}
+
 // Watcher manages the pool of S3 endpoints to monitor
 type Watcher struct {
-	consulClient probe.ConsulClient
-	cfg          *config.Config
-	s3Pools      map[string](chan bool)
+	consulClient    probe.ConsulClient
+	cfg             *config.Config
+	watchedServices map[string]watchedService
 }
 
 var serviceDiscoveryErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -30,9 +35,9 @@ func NewWatcher(cfg config.Config) Watcher {
 		panic(err)
 	}
 	return Watcher{
-		cfg:          &cfg,
-		consulClient: client,
-		s3Pools:      make(map[string](chan bool)),
+		cfg:             &cfg,
+		consulClient:    client,
+		watchedServices: map[string]watchedService{},
 	}
 }
 
@@ -52,12 +57,11 @@ func (w *Watcher) WatchPools(interval time.Duration) {
 }
 
 func (w *Watcher) createNewProbes(servicesToAdd []probe.S3Service) {
-	var probeChan chan bool
-	for i := range servicesToAdd {
-		log.Printf("Creating new probe for: %s, gateway: %t", servicesToAdd[i].Name, servicesToAdd[i].Gateway)
-		probeChan = make(chan bool)
-		p, err := probe.NewProbeFromConsul(servicesToAdd[i], w.cfg, probeChan)
+	for _, s3service := range servicesToAdd {
+		log.Printf("Creating new probe for: %s, gateway: %t", s3service.Name, s3service.Gateway)
+		probeChan := make(chan bool)
 
+		p, err := probe.NewProbeFromConsul(s3service, w.cfg, probeChan)
 		if err != nil {
 			log.Println("Error while creating probe:", err)
 			continue
@@ -70,21 +74,19 @@ func (w *Watcher) createNewProbes(servicesToAdd []probe.S3Service) {
 			continue
 		}
 
-		w.s3Pools[servicesToAdd[i].Name] = probeChan
+		w.watchedServices[s3service.Name] = watchedService{service: s3service, probeChan: probeChan}
 		go p.StartProbing()
 	}
 }
 
 func (w *Watcher) flushOldProbes(servicesToRemove []probe.S3Service) {
-	var ok bool
-	var probeChan chan bool
-	for i := range servicesToRemove {
-		log.Printf("Removing old probe for: %s", servicesToRemove[i].Name)
-		probeChan, ok = w.s3Pools[servicesToRemove[i].Name]
+	for _, s3service := range servicesToRemove {
+		log.Printf("Removing old probe for: %s", s3service.Name)
+		ws, ok := w.watchedServices[s3service.Name]
 		if ok {
-			delete(w.s3Pools, servicesToRemove[i].Name)
-			probeChan <- false
-			close(probeChan)
+			delete(w.watchedServices, s3service.Name)
+			ws.probeChan <- false
+			close(ws.probeChan)
 		}
 	}
 }
@@ -100,8 +102,8 @@ func (w *Watcher) getServicesToModify(servicesFromConsul []probe.S3Service, watc
 func (w *Watcher) getWatchedServices() []probe.S3Service {
 	currentServices := []probe.S3Service{}
 
-	for k := range w.s3Pools {
-		currentServices = append(currentServices, probe.S3Service{Name: k})
+	for _, ws := range w.watchedServices {
+		currentServices = append(currentServices, ws.service)
 	}
 	return currentServices
 }
