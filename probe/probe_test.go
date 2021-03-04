@@ -1,11 +1,14 @@
 package probe
 
 import (
+	"context"
 	"log"
 	"testing"
+	"time"
 
 	"github.com/criteo/s3-probe/config"
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
@@ -19,7 +22,7 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 		t.Errorf("Bucket Creation failed: %s", err)
 	}
 
-	exists, _ := probe.endpoint.s3Client.BucketExists(probe.latencyBucketName)
+	exists, _ := probe.endpoint.s3Client.BucketExists(context.Background(), probe.latencyBucketName)
 	if !exists {
 		t.Errorf("Bucket preparation failed")
 	}
@@ -37,7 +40,11 @@ func TestPrepareBucketCreateBucketIfNotExists(t *testing.T) {
 
 func TestPrepareBucketFailedIfNotAuth(t *testing.T) {
 	probe, _ := getTestProbe()
-	client, _ := minio.New(probe.endpoint.Name, probe.accessKey, "FAKEFAKE", false)
+	creds := credentials.NewStaticV4(probe.accessKey, "FAKEFAKE", "")
+	client, _ := minio.New(probe.endpoint.Name, &minio.Options{
+		Creds:  creds,
+		Secure: false,
+	})
 	probe.endpoint.s3Client = client
 
 	suffix, _ := randomHex(8)
@@ -61,6 +68,23 @@ func TestPerformLatencyCheckSuccess(t *testing.T) {
 	err = probe.performDurabilityChecks()
 	if err != nil {
 		t.Errorf("Probe check is failing: %s", err)
+	}
+}
+
+func TestPerformLatencyCheckFailWithTimeout(t *testing.T) {
+	probe, _ := getTestProbe()
+	suffix, _ := randomHex(8)
+	probe.latencyBucketName = probe.latencyBucketName + suffix
+	probe.durabilityBucketName = probe.durabilityBucketName + suffix
+	probe.durabilityItemTotal = 10
+	probe.latencyTimeout = 1 * time.Nanosecond
+	err := probe.prepareLatencyBucket()
+	if err != nil {
+		t.Errorf("Bucket Creation failed: %s", err)
+	}
+	err = probe.performLatencyChecks()
+	if err == nil {
+		t.Error("Probe check should have timeout", err)
 	}
 }
 
@@ -106,7 +130,7 @@ func getTestProbe() (Probe, error) {
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s", err)
 	}
-	_, err = probe.endpoint.s3Client.ListBuckets()
+	_, err = probe.endpoint.s3Client.ListBuckets(context.Background())
 	if err != nil {
 		log.Fatalf("Error while creating test env: %s (please set ENV: S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY)", err)
 	}
