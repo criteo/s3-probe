@@ -2,6 +2,7 @@ package probe
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -12,7 +13,9 @@ import (
 	"time"
 
 	"github.com/criteo/s3-probe/config"
-	minio "github.com/minio/minio-go/v6"
+	minio "github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/lifecycle"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -85,6 +88,8 @@ type Probe struct {
 	latencyItemSize           int
 	durabilityItemSize        int
 	durabilityItemTotal       int
+	durabilityTimeout         time.Duration
+	latencyTimeout            time.Duration
 	gatewayEndpoints          []S3Endpoint
 	controlChan               chan bool
 }
@@ -117,6 +122,8 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint,
 		latencyItemSize:           *cfg.LatencyItemSize,
 		durabilityItemSize:        *cfg.DurabilityItemSize,
 		durabilityItemTotal:       *cfg.DurabilityItemTotal,
+		durabilityTimeout:         *cfg.DurabilityTimeout,
+		latencyTimeout:            *cfg.LatencyTimeout,
 		controlChan:               controlChan,
 		gatewayEndpoints:          gatewayEndpoints,
 	}, nil
@@ -132,8 +139,10 @@ func newMinioClientFromEndpoint(endpoint string, accessKey string, secretKey str
 	} else if match[1] == "http://" {
 		endpoint = match[2]
 	}
-
-	return minio.New(endpoint, accessKey, secretKey, secure)
+	return minio.New(endpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+		Secure: secure,
+	})
 }
 
 type timer struct {
@@ -211,9 +220,10 @@ func (p *Probe) StartProbing() error {
 }
 
 func (p *Probe) performDurabilityChecks() error {
-	doneCh := make(chan struct{})
+	ctx, cancel := context.WithTimeout(context.Background(), p.durabilityTimeout)
+	defer cancel()
 	s3ExpectedDurabilityItems.WithLabelValues(p.name).Set(float64(p.durabilityItemTotal))
-	objectCh := p.endpoint.s3Client.ListObjects(p.durabilityBucketName, "", false, doneCh)
+	objectCh := p.endpoint.s3Client.ListObjects(ctx, p.durabilityBucketName, minio.ListObjectsOptions{})
 	objectTotal := 0
 	for object := range objectCh {
 		if object.Err != nil {
@@ -230,8 +240,8 @@ func (p *Probe) performLatencyChecks() error {
 	objectName, _ := randomHex(20)
 	objectSize := int64(p.latencyItemSize)
 
-	operation := func() error {
-		_, err := p.endpoint.s3Client.ListBuckets()
+	operation := func(ctx context.Context) error {
+		_, err := p.endpoint.s3Client.ListBuckets(ctx)
 		return err
 	}
 	if err := p.mesureOperation("list_buckets", operation); err != nil {
@@ -239,16 +249,16 @@ func (p *Probe) performLatencyChecks() error {
 	}
 
 	objectData, _ := randomObject(objectSize)
-	operation = func() error {
-		_, err := p.endpoint.s3Client.PutObject(p.latencyBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+	operation = func(ctx context.Context) error {
+		_, err := p.endpoint.s3Client.PutObject(ctx, p.latencyBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("put_object", operation); err != nil {
 		return err
 	}
 
-	operation = func() error {
-		obj, err := p.endpoint.s3Client.GetObject(p.latencyBucketName, objectName, minio.GetObjectOptions{})
+	operation = func(ctx context.Context) error {
+		obj, err := p.endpoint.s3Client.GetObject(ctx, p.latencyBucketName, objectName, minio.GetObjectOptions{})
 		defer obj.Close()
 		data := make([]byte, p.latencyItemSize)
 		for {
@@ -264,8 +274,8 @@ func (p *Probe) performLatencyChecks() error {
 		return err
 	}
 
-	operation = func() error {
-		err := p.endpoint.s3Client.RemoveObject(p.latencyBucketName, objectName)
+	operation = func(ctx context.Context) error {
+		err := p.endpoint.s3Client.RemoveObject(ctx, p.latencyBucketName, objectName, minio.RemoveObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("remove_object", operation); err != nil {
@@ -280,8 +290,8 @@ func (p *Probe) performGatewayChecks() error {
 	objectSize := int64(1024)
 
 	objectData, _ := randomObject(objectSize)
-	operation := func() error {
-		_, err := p.endpoint.s3Client.PutObject(p.gatewayBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+	operation := func(ctx context.Context) error {
+		_, err := p.endpoint.s3Client.PutObject(ctx, p.gatewayBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
 	}
 	if err := p.mesureOperation("gateway_put_object", operation); err != nil {
@@ -291,7 +301,7 @@ func (p *Probe) performGatewayChecks() error {
 	for i := range p.gatewayEndpoints {
 		operationName = "gateway_get_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
-		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(p.gatewayBucketName, objectName, minio.GetObjectOptions{})
+		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(context.Background(), p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		}
@@ -308,7 +318,7 @@ func (p *Probe) performGatewayChecks() error {
 
 		operationName = "gateway_remove_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
-		err = p.gatewayEndpoints[i].s3Client.RemoveObject(p.gatewayBucketName, objectName)
+		err = p.gatewayEndpoints[i].s3Client.RemoveObject(context.Background(), p.gatewayBucketName, objectName, minio.RemoveObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {
@@ -319,9 +329,11 @@ func (p *Probe) performGatewayChecks() error {
 	return nil
 }
 
-func (p *Probe) mesureOperation(operationName string, operation func() error) error {
+func (p *Probe) mesureOperation(operationName string, operation func(ctx context.Context) error) error {
 	start := time.Now()
-	err := operation()
+	ctx, cancel := context.WithTimeout(context.Background(), p.latencyTimeout)
+	defer cancel()
+	err := operation(ctx)
 
 	s3TotalCounter.WithLabelValues(operationName, p.name).Inc()
 	s3LatencyHistogram.WithLabelValues(operationName, p.name).Observe(time.Since(start).Seconds())
@@ -343,12 +355,12 @@ func (p *Probe) checkDurabilityBucketHasEnoughObject() (bool, error) {
 	// Indicate to our routine to exit cleanly upon return.
 	defer close(doneCh)
 
-	objectCh := p.endpoint.s3Client.ListObjectsV2(p.durabilityBucketName, "", false, doneCh)
+	objectCh := p.endpoint.s3Client.ListObjects(context.Background(), p.durabilityBucketName, minio.ListObjectsOptions{})
 	for object := range objectCh {
 		if object.Err != nil {
 			return false, object.Err
 		}
-		countObj += 1
+		countObj++
 	}
 
 	if countObj >= p.durabilityItemTotal {
@@ -359,7 +371,7 @@ func (p *Probe) checkDurabilityBucketHasEnoughObject() (bool, error) {
 
 func (p *Probe) prepareDurabilityBucket() error {
 	log.Printf("Checking if durability bucket is present on %s", p.name)
-	exists, errBucketExists := p.endpoint.s3Client.BucketExists(p.durabilityBucketName)
+	exists, errBucketExists := p.endpoint.s3Client.BucketExists(context.Background(), p.durabilityBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
 	}
@@ -373,7 +385,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 			return nil
 		}
 	} else {
-		err := p.endpoint.s3Client.MakeBucket(p.durabilityBucketName, "")
+		err := p.endpoint.s3Client.MakeBucket(context.Background(), p.durabilityBucketName, minio.MakeBucketOptions{})
 		if err != nil {
 			return err
 		}
@@ -388,12 +400,12 @@ func (p *Probe) prepareDurabilityBucket() error {
 	var objectName string
 	for i := 0; i < p.durabilityItemTotal; i++ {
 		objectName = objectSuffix + strconv.Itoa(i)
-		_, err := p.endpoint.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+		_, err := p.endpoint.s3Client.PutObject(context.Background(), p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 
 		for err != nil {
 			log.Printf("Error (item: %d): %s, retrying in (5s)", i, err)
 			time.Sleep(5 * time.Second)
-			_, err = p.endpoint.s3Client.PutObject(p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
+			_, err = p.endpoint.s3Client.PutObject(context.Background(), p.durabilityBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		}
 		if i%100 == 0 {
 			log.Printf("%s> %d objects written (%d%%)", p.name, i, int((float64(i)/float64(p.durabilityItemTotal))*100))
@@ -404,7 +416,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 
 func (p *Probe) prepareLatencyBucket() error {
 	log.Printf("Checking if latency bucket is present on %s", p.name)
-	exists, errBucketExists := p.endpoint.s3Client.BucketExists(p.latencyBucketName)
+	exists, errBucketExists := p.endpoint.s3Client.BucketExists(context.Background(), p.latencyBucketName)
 	if errBucketExists != nil {
 		return errBucketExists
 	}
@@ -414,7 +426,7 @@ func (p *Probe) prepareLatencyBucket() error {
 	log.Println("Preparing latency bucket")
 	probeBucketAttempt.WithLabelValues(p.name).Inc()
 
-	err := p.endpoint.s3Client.MakeBucket(p.latencyBucketName, "")
+	err := p.endpoint.s3Client.MakeBucket(context.Background(), p.latencyBucketName, minio.MakeBucketOptions{})
 	if err != nil {
 		return err
 	}
@@ -429,7 +441,7 @@ func (p *Probe) prepareGatewayBucket() error {
 		return errors.New("Couldn't find any gateway destinations")
 	}
 	for i := range p.gatewayEndpoints {
-		exists, errBucketExists := p.gatewayEndpoints[i].s3Client.BucketExists(p.gatewayBucketName)
+		exists, errBucketExists := p.gatewayEndpoints[i].s3Client.BucketExists(context.Background(), p.gatewayBucketName)
 		if errBucketExists != nil {
 			return errBucketExists
 		}
@@ -439,7 +451,7 @@ func (p *Probe) prepareGatewayBucket() error {
 		log.Printf("Preparing gateway bucket on %s", p.gatewayEndpoints[i].Name)
 		probeGatewayBucketAttempt.WithLabelValues(p.name, p.gatewayEndpoints[i].Name).Inc()
 
-		err := p.gatewayEndpoints[i].s3Client.MakeBucket(p.gatewayBucketName, "")
+		err := p.gatewayEndpoints[i].s3Client.MakeBucket(context.Background(), p.gatewayBucketName, minio.MakeBucketOptions{})
 		if err != nil {
 			return err
 		}
@@ -449,18 +461,17 @@ func (p *Probe) prepareGatewayBucket() error {
 }
 
 func setBucketLifecycle1d(client *minio.Client, bucketName string) {
-	lifecycle1d := `<LifecycleConfiguration>
-		<Rule>
-			<ID>expire-bucket</ID>
-			<Prefix></Prefix>
-			<Status>Enabled</Status>
-			<Expiration>
-				<Days>1</Days>
-			</Expiration>
-		</Rule>
-	</LifecycleConfiguration>`
-
-	client.SetBucketLifecycle(bucketName, lifecycle1d)
+	lc := lifecycle.NewConfiguration()
+	lc.Rules = []lifecycle.Rule{
+		{
+			ID:     "expire-bucket",
+			Status: "Enabled",
+			Expiration: lifecycle.Expiration{
+				Days: 1,
+			},
+		},
+	}
+	client.SetBucketLifecycle(context.Background(), bucketName, lc)
 }
 
 func randomHex(n int) (string, error) {
