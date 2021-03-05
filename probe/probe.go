@@ -304,17 +304,18 @@ func (p *Probe) performGatewayChecks() error {
 		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(context.Background(), p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
-		}
-		// Read data by chunks of 1024 bytes
-		data := make([]byte, 1024)
-		for _, err = obj.Read(data); err == nil; {
-		}
-		if err != io.EOF {
-			log.Printf("Error while executing %s: %s", operationName, err)
 		} else {
-			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
+			// Read data by chunks of 1024 bytes
+			data := make([]byte, 1024)
+			for _, err = obj.Read(data); err == nil; {
+			}
+			if err != io.EOF {
+				log.Printf("Error while executing %s: %s", operationName, err)
+			} else {
+				s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
+			}
+			obj.Close()
 		}
-		obj.Close()
 
 		operationName = "gateway_remove_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
