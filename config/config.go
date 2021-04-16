@@ -41,7 +41,7 @@ func ParseConfig() Config {
 		DurabilityBucketName:      flag.String("durability-bucket", "monitoring-durability", "Bucket used for the durability monitoring probe (will read and write)"),
 		Interval:                  flag.Duration("interval", 600*time.Second, "How often consul is polled to discover new S3 endoints"),
 		DurabilityTimeout:         flag.Duration("durablity-timeout", 60*time.Second, "Timeout duration of the durability check"),
-		LatencyTimeout:            flag.Duration("latency-timeout", 5*time.Second, "Timeout duration of the latency check"),
+		LatencyTimeout:            flag.Duration("latency-timeout", 30*time.Second, "Timeout duration of the latency check"),
 		Addr:                      flag.String("listen-address", ":8080", "The address to listen on for HTTP requests."),
 		AccessKey:                 flag.String("s3-access-key", "", "User key of the S3 endpoint"),
 		SecretKey:                 flag.String("s3-secret-key", "", "Access key of the S3 endpoint"),
