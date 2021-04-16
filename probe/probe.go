@@ -21,8 +21,9 @@ import (
 )
 
 var s3LatencySummary = promauto.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "s3_latency_seconds",
-	Help: "Latency for operation on the S3 endpoint",
+	Name:   "s3_latency_seconds",
+	Help:   "Latency for operation on the S3 endpoint",
+	MaxAge: 1 * time.Minute,
 }, []string{"operation", "endpoint"})
 
 var s3LatencyHistogram = promauto.NewHistogramVec(prometheus.HistogramOpts{
