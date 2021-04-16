@@ -21,14 +21,15 @@ import (
 )
 
 var s3LatencySummary = promauto.NewSummaryVec(prometheus.SummaryOpts{
-	Name: "s3_latency_seconds",
-	Help: "Latency for operation on the S3 endpoint",
+	Name:   "s3_latency_seconds",
+	Help:   "Latency for operation on the S3 endpoint",
+	MaxAge: 1 * time.Minute,
 }, []string{"operation", "endpoint"})
 
 var s3LatencyHistogram = promauto.NewHistogramVec(prometheus.HistogramOpts{
 	Name:    "s3_latency_histogram_seconds",
 	Help:    "Latency for operation on the S3 endpoint",
-	Buckets: []float64{.001, .0025, .005, .010, .015, .020, .025, .030, .040, .050, .060, .075, .100, .250, .500, 1, 2.5, 5, 10},
+	Buckets: []float64{.001, .0025, .005, .010, .015, .020, .025, .030, .040, .050, .060, .075, .100, .250, .500, 1, 2.5, 5, 10, 15, 30, 45, 60},
 }, []string{"operation", "endpoint"})
 
 var s3TotalCounter = promauto.NewCounterVec(prometheus.CounterOpts{
