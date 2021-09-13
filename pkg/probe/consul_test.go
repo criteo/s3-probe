@@ -63,8 +63,9 @@ func getTestServiceEntries() (entries []*consul_api.ServiceEntry) {
 
 func TestGenerateEndointFromConsulWithoutProxyData(t *testing.T) {
 	entries := getTestServiceEntries()
-	endpoint, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
-	if endpoint != "test.us-east-1.prod:8080" || err != nil {
+	entries[0].Service.Meta["external_cluster_fqdn"] = "http://test.us-east-1.prod:8080"
+	endpoint, err := getEndpointFromConsul("test", entries)
+	if endpoint != "http://test.us-east-1.prod:8080" || err != nil {
 		t.Errorf("Failed to generate URL from Consul data")
 	}
 }
@@ -72,7 +73,7 @@ func TestGenerateEndointFromConsulWithoutProxyData(t *testing.T) {
 func TestGenerateEndointFromConsulWithProxyData(t *testing.T) {
 	entries := getTestServiceEntries()
 	entries[0].Service.Meta["proxy_address"] = "foo.bar"
-	endpoint, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
+	endpoint, err := getEndpointFromConsul("test", entries)
 	if endpoint != "foo.bar" || err != nil {
 		t.Errorf("Failed to generate URL from proxy_address data")
 	}
@@ -97,7 +98,7 @@ func TestExtractDestinations(t *testing.T) {
 
 func TestGenerateEndointFailIfConsulServiceEmpty(t *testing.T) {
 	entries := []*consul_api.ServiceEntry{}
-	_, err := getEndpointFromConsul("test", ".{dc}.prod", entries)
+	_, err := getEndpointFromConsul("test", entries)
 	if err == nil {
 		t.Errorf("GenerateEndpoint should fail when given empty service")
 	}
@@ -110,13 +111,5 @@ func TestExtractDestinationsFailIfWronglyFormatted(t *testing.T) {
 
 	if err == nil {
 		t.Errorf("Extract destination didn't fail on poorly formated destinations")
-	}
-}
-
-func TestGetDatacenterFailIfConsulServiceEmpty(t *testing.T) {
-	entries := []*consul_api.ServiceEntry{}
-	_, err := getDatacenter(entries)
-	if err == nil {
-		t.Errorf("GetDatacenter should return an error when called with empty service")
 	}
 }
