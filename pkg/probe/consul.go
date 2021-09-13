@@ -1,14 +1,13 @@
 package probe
 
 import (
-	"errors"
-	"fmt"
 	"github.com/criteo/s3-probe/pkg/config"
 	"log"
 	"regexp"
 	"strings"
 
 	consul_api "github.com/hashicorp/consul/api"
+	"github.com/pkg/errors"
 )
 
 // ConsulClient is a wrapper around true consul client to ease mocking
@@ -94,7 +93,7 @@ func (cc *consulClientImpl) GetServiceEndPoints(serviceName string, isGateway bo
 		return "", []S3Endpoint{}, err
 	}
 
-	endpoint, err := getEndpointFromConsul(serviceName, *cc.cfg.EndpointSuffix, serviceEntries)
+	endpoint, err := getEndpointFromConsul(serviceName, serviceEntries)
 	if err != nil {
 		log.Printf("Fail to resolve service endpoint from consul service entries for service %s: %s\n", serviceName, err)
 		return "", []S3Endpoint{}, err
@@ -117,18 +116,16 @@ func NewProbeFromConsul(service S3Service, cfg *config.Config, controlChan chan 
 	return NewProbe(service, service.Endpoint, service.GatewayReadEnpoints, cfg, controlChan)
 }
 
-func getEndpointFromConsul(name string, endpointSuffix string, serviceEntries []*consul_api.ServiceEntry) (string, error) {
+func getEndpointFromConsul(name string, serviceEntries []*consul_api.ServiceEntry) (string, error) {
 	endpoint := ""
 	if proxy, ok := getProxyEndpoint(serviceEntries); ok {
 		endpoint = proxy
 	} else {
-		port, err := getServicePort(serviceEntries)
-		if err != nil {
-			return "", err
+		if externalClusterFqdn, ok := getExternalClusterFqdn(serviceEntries); ok {
+			endpoint = externalClusterFqdn
+		} else {
+			return "", errors.Errorf("Endpoint name not found for %s", name)
 		}
-		dc, err := getDatacenter(serviceEntries)
-		endpointSuffixWithDC := strings.ReplaceAll(endpointSuffix, "{dc}", dc)
-		endpoint = fmt.Sprintf("%s%s:%d", name, endpointSuffixWithDC, port)
 	}
 
 	return endpoint, nil
@@ -151,7 +148,7 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg *conf
 			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destination.raw, destination.datacenter, destination.service, err)
 			return s3endpoints, err
 		}
-		endpointName, err := getEndpointFromConsul(destination.service, *cfg.EndpointSuffix, endpointEntries)
+		endpointName, err := getEndpointFromConsul(destination.service, endpointEntries)
 		if err != nil {
 			return s3endpoints, err
 		}
@@ -195,22 +192,17 @@ func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destination
 	return destinations, nil
 }
 
-// getServicePort return the first port found in the service or 80
-func getServicePort(serviceEntries []*consul_api.ServiceEntry) (int, error) {
-	if len(serviceEntries) == 0 {
-		return 80, errors.New("Consul service is empty")
+func getExternalClusterFqdn(serviceEntries []*consul_api.ServiceEntry) (string, bool) {
+	ok := false
+	for i := range serviceEntries {
+		value, ok := serviceEntries[i].Service.Meta["external_cluster_fqdn"]
+		if ok {
+			return value, ok
+		}
 	}
-	return serviceEntries[0].Service.Port, nil
+	return "", ok
 }
 
-func getDatacenter(serviceEntries []*consul_api.ServiceEntry) (string, error) {
-	if len(serviceEntries) == 0 {
-		return "", errors.New("Consul service is empty")
-	}
-	return serviceEntries[0].Node.Datacenter, nil
-}
-
-// getServicePort return the first port found in the service or 80
 func getProxyEndpoint(serviceEntries []*consul_api.ServiceEntry) (string, bool) {
 	ok := false
 	proxy := ""

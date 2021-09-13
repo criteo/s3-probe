@@ -131,7 +131,7 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint,
 }
 
 func newMinioClientFromEndpoint(endpoint string, accessKey string, secretKey string) (*minio.Client, error) {
-	re := regexp.MustCompile("^(http[s]+://)?(.*)")
+	re := regexp.MustCompile("^(http[s]?://)?(.*)")
 	match := re.FindStringSubmatch(endpoint)
 	secure := false
 	if match[1] == "https://" {

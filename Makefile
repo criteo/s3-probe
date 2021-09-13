@@ -27,8 +27,13 @@ update-fmt:
 vet:
 	@go vet ${GOPKGS}
 
+.PHONY: test-unit
+test-unit:
+	docker start minio_server || docker run --name minio_server -d -p 9000:9000 -e "MINIO_ACCESS_KEY=9PWM3PGAOU5TESTINGKEY" -e "MINIO_SECRET_KEY=p4KQAm5cLKfW2QoJG8SI5JOI3gYSECRETKEY" minio/minio server /data
+	go test -timeout 30s ${GOPKGS}
+
 .PHONY: test
-test: fmt vet
+test: fmt vet test-unit
 
 .PHONY: update-go-deps
 update-go-deps:

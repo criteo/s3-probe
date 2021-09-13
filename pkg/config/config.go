@@ -11,7 +11,6 @@ type Config struct {
 	ConsulAddr                *string
 	Tag                       *string
 	GatewayTag                *string
-	EndpointSuffix            *string
 	LatencyBucketName         *string
 	GatewayBucketName         *string
 	DurabilityBucketName      *string
@@ -31,11 +30,9 @@ type Config struct {
 // ParseConfig parse the configuration and create a Config struct
 func ParseConfig() Config {
 	config := Config{
-		ConsulAddr: flag.String("consul", "localhost:8500", "Consul server address"),
-		Tag:        flag.String("tag", "s3", "Tag to search on consul"),
-		GatewayTag: flag.String("gateway-tag", "s3-gateway", "Tag to search on consul"),
-		EndpointSuffix: flag.String("suffix", ".service.{dc}.foo.bar",
-			"Suffix to add after the consul service name to create a valid domain name"),
+		ConsulAddr:                flag.String("consul", "localhost:8500", "Consul server address"),
+		Tag:                       flag.String("tag", "s3", "Tag to search on consul"),
+		GatewayTag:                flag.String("gateway-tag", "s3-gateway", "Tag to search on consul"),
 		LatencyBucketName:         flag.String("latency-bucket", "monitoring-latency", "Bucket used for the latency monitoring probe (will read and write)"),
 		GatewayBucketName:         flag.String("gateway-bucket", "monitoring-gateway", "Bucket used for the gateway latency monitoring probe (will read and write)"),
 		DurabilityBucketName:      flag.String("durability-bucket", "monitoring-durability", "Bucket used for the durability monitoring probe (will read and write)"),
@@ -75,7 +72,6 @@ func GetTestConfig() Config {
 		ConsulAddr:                &dummyValue,
 		Tag:                       &dummyValue,
 		GatewayTag:                &dummyValue,
-		EndpointSuffix:            &dummyValue,
 		LatencyBucketName:         &latencyBucketName,
 		GatewayBucketName:         &latencyBucketName,
 		DurabilityBucketName:      &durabilityBucketName,
