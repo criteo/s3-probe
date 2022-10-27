@@ -6,12 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"github.com/criteo/s3-probe/pkg/config"
+	"fmt"
 	"io"
 	"log"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/criteo/s3-probe/pkg/config"
 
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -288,7 +290,8 @@ func (p *Probe) performLatencyChecks() error {
 }
 
 func (p *Probe) performGatewayChecks() error {
-	objectName, _ := randomHex(20)
+	objectRandSuffix, _ := randomHex(20)
+	objectName := fmt.Sprintf("%s-%s", p.name, objectRandSuffix)
 	objectSize := int64(1024)
 
 	objectData, _ := randomObject(objectSize)
