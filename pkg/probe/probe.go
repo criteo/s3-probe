@@ -312,12 +312,14 @@ func (p *Probe) performGatewayChecks() error {
 		log.Printf("Error while executing %s (endpoint:%s): %s", operationName, p.name, err)
 		return err
 	}
+
 	for i := range p.gatewayEndpoints {
 		operationName = "gateway_get_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(context.Background(), p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
+			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			// Read data by chunks of 1024 bytes
 			data := make([]byte, 1024)
@@ -325,6 +327,7 @@ func (p *Probe) performGatewayChecks() error {
 			}
 			if err != io.EOF {
 				log.Printf("Error while executing %s: %s", operationName, err)
+				s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			} else {
 				s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			}
@@ -336,6 +339,7 @@ func (p *Probe) performGatewayChecks() error {
 		err = p.gatewayEndpoints[i].s3Client.RemoveObject(context.Background(), p.gatewayBucketName, objectName, minio.RemoveObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
+			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		}
