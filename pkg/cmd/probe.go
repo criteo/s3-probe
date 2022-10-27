@@ -1,12 +1,14 @@
 package main
 
 import (
-	"github.com/criteo/s3-probe/pkg/config"
-	"github.com/criteo/s3-probe/pkg/watcher"
 	"net/http"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/criteo/s3-probe/pkg/config"
+	"github.com/criteo/s3-probe/pkg/watcher"
+
 	_ "net/http/pprof"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
