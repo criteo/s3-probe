@@ -6,12 +6,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"github.com/criteo/s3-probe/pkg/config"
+	"fmt"
 	"io"
 	"log"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/criteo/s3-probe/pkg/config"
 
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -51,6 +53,11 @@ var s3GatewayTotalCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 var s3GatewaySuccessCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "s3_gateway_request_success_total",
 	Help: "Total number of successful gateway requests on S3 endpoint",
+}, []string{"operation", "endpoint", "gateway_endpoint"})
+
+var s3GatewayErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "s3_gateway_request_error_total",
+	Help: "Total number of failed gateway requests on S3 endpoint",
 }, []string{"operation", "endpoint", "gateway_endpoint"})
 
 var s3ExpectedDurabilityItems = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -288,7 +295,8 @@ func (p *Probe) performLatencyChecks() error {
 }
 
 func (p *Probe) performGatewayChecks() error {
-	objectName, _ := randomHex(20)
+	objectRandSuffix, _ := randomHex(20)
+	objectName := fmt.Sprintf("%s-%s", p.name, objectRandSuffix)
 	objectSize := int64(1024)
 
 	objectData, _ := randomObject(objectSize)
@@ -306,6 +314,7 @@ func (p *Probe) performGatewayChecks() error {
 		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(context.Background(), p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
+			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			// Read data by chunks of 1024 bytes
 			data := make([]byte, 1024)
@@ -313,6 +322,7 @@ func (p *Probe) performGatewayChecks() error {
 			}
 			if err != io.EOF {
 				log.Printf("Error while executing %s: %s", operationName, err)
+				s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			} else {
 				s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			}
@@ -324,6 +334,7 @@ func (p *Probe) performGatewayChecks() error {
 		err = p.gatewayEndpoints[i].s3Client.RemoveObject(context.Background(), p.gatewayBucketName, objectName, minio.RemoveObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
+			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		}
