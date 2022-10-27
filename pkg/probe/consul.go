@@ -89,7 +89,7 @@ func (cc *consulClientImpl) GetAllMatchingRegisteredServices() (map[string]bool,
 func (cc *consulClientImpl) GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error) {
 	log.Printf("Fetching endpoints for service: %s", serviceName)
 	health := cc.consulClient.Health()
-	serviceEntries, _, err := health.Service(serviceName, "", false, nil)
+	serviceEntries, _, err := health.Service(serviceName, "", true, nil)
 	if err != nil {
 		log.Printf("Fail to query health information for service %s from consul: %s\n", serviceName, err)
 		return "", []S3Endpoint{}, err
@@ -145,7 +145,7 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg *conf
 
 	for _, destination := range destinations {
 
-		endpointEntries, _, err := health.Service(destination.service, "", false, &consul_api.QueryOptions{Datacenter: destination.datacenter})
+		endpointEntries, _, err := health.Service(destination.service, "", true, &consul_api.QueryOptions{Datacenter: destination.datacenter})
 		if err != nil {
 			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destination.raw, destination.datacenter, destination.service, err)
 			return s3endpoints, err
