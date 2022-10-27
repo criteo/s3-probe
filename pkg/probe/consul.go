@@ -1,10 +1,11 @@
 package probe
 
 import (
-	"github.com/criteo/s3-probe/pkg/config"
 	"log"
 	"regexp"
 	"strings"
+
+	"github.com/criteo/s3-probe/pkg/config"
 
 	consul_api "github.com/hashicorp/consul/api"
 	"github.com/pkg/errors"
@@ -86,6 +87,7 @@ func (cc *consulClientImpl) GetAllMatchingRegisteredServices() (map[string]bool,
 
 // getServiceEndPoint resolves the endpoint address of the given serviceName via consul
 func (cc *consulClientImpl) GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error) {
+	log.Printf("Fetching endpoints for service: %s", serviceName)
 	health := cc.consulClient.Health()
 	serviceEntries, _, err := health.Service(serviceName, "", false, nil)
 	if err != nil {

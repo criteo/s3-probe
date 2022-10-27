@@ -116,7 +116,7 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint,
 		return Probe{}, err
 	}
 
-	log.Println("Probe created for:", endpoint)
+	log.Printf("Probe created for: %s", endpoint)
 	return Probe{
 		name:                      service.Name,
 		gateway:                   service.Gateway,
@@ -175,23 +175,23 @@ func (t *timer) Stop() {
 }
 
 func (p *Probe) PrepareProbing() error {
-	log.Println("Prepare probing")
+	log.Printf("Prepare probing for %s", p.name)
 
 	if p.gateway {
 		err := p.prepareGatewayBucket()
 		if err != nil {
-			log.Println("Error: cannot prepare gateway latency bucket:", err)
+			log.Printf("Error: cannot prepare gateway latency bucket on %s: %s", p.name, err)
 			return err
 		}
 	} else {
 		err := p.prepareLatencyBucket()
 		if err != nil {
-			log.Println("Error: cannot prepare latency bucket:", err)
+			log.Printf("Error: cannot prepare latency bucket on %s: %s", p.name, err)
 			return err
 		}
 		err = p.prepareDurabilityBucket()
 		if err != nil {
-			log.Println("Error: cannot prepare durability bucket:", err)
+			log.Printf("Error: cannot prepare durability bucket on %s: %s", p.name, err)
 			return err
 		}
 	}
@@ -200,7 +200,7 @@ func (p *Probe) PrepareProbing() error {
 
 // StartProbing start to probe the S3 endpoint
 func (p *Probe) StartProbing() error {
-	log.Println("Starting probing")
+	log.Printf("Starting probing for %s", p.name)
 
 	tickerProbe := newTimer(p.probeRatePerMin)
 	tickerDurabilityProbe := newTimer(p.durabilityProbeRatePerMin)
@@ -210,7 +210,7 @@ func (p *Probe) StartProbing() error {
 		// If we receive something on the control chan we terminate
 		// otherwise we continue to perform checks
 		case <-p.controlChan:
-			log.Println("Terminating probe on", p.name)
+			log.Printf("Terminating probe on %s", p.name)
 			tickerProbe.Stop()
 			tickerDurabilityProbe.Stop()
 			return nil
@@ -236,7 +236,7 @@ func (p *Probe) performDurabilityChecks() error {
 	objectTotal := 0
 	for object := range objectCh {
 		if object.Err != nil {
-			log.Println(object.Err)
+			log.Printf("Error while listing object during durability check (endpoint:%s, object:%s): %s", p.name, object.Key, object.Err)
 			return object.Err
 		}
 		objectTotal++
@@ -268,6 +268,9 @@ func (p *Probe) performLatencyChecks() error {
 
 	operation = func(ctx context.Context) error {
 		obj, err := p.endpoint.s3Client.GetObject(ctx, p.latencyBucketName, objectName, minio.GetObjectOptions{})
+		if err != nil {
+			return err
+		}
 		defer obj.Close()
 		data := make([]byte, p.latencyItemSize)
 		for {
@@ -304,17 +307,17 @@ func (p *Probe) performGatewayChecks() error {
 		_, err := p.endpoint.s3Client.PutObject(ctx, p.gatewayBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
 	}
-	if err := p.mesureOperation("gateway_put_object", operation); err != nil {
+	operationName := "gateway_put_object"
+	if err := p.mesureOperation(operationName, operation); err != nil {
+		log.Printf("Error while executing %s (endpoint:%s): %s", operationName, p.name, err)
 		return err
 	}
-	var operationName string
 	for i := range p.gatewayEndpoints {
 		operationName = "gateway_get_object"
 		s3GatewayTotalCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		obj, err := p.gatewayEndpoints[i].s3Client.GetObject(context.Background(), p.gatewayBucketName, objectName, minio.GetObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
-			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			// Read data by chunks of 1024 bytes
 			data := make([]byte, 1024)
@@ -322,7 +325,6 @@ func (p *Probe) performGatewayChecks() error {
 			}
 			if err != io.EOF {
 				log.Printf("Error while executing %s: %s", operationName, err)
-				s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			} else {
 				s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 			}
@@ -334,7 +336,6 @@ func (p *Probe) performGatewayChecks() error {
 		err = p.gatewayEndpoints[i].s3Client.RemoveObject(context.Background(), p.gatewayBucketName, objectName, minio.RemoveObjectOptions{})
 		if err != nil {
 			log.Printf("Error while executing %s: %s", operationName, err)
-			s3GatewayErrorCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		} else {
 			s3GatewaySuccessCounter.WithLabelValues(operationName, p.name, p.gatewayEndpoints[i].Name).Inc()
 		}
@@ -354,7 +355,7 @@ func (p *Probe) mesureOperation(operationName string, operation func(ctx context
 	s3LatencySummary.WithLabelValues(operationName, p.name).Observe(time.Since(start).Seconds())
 
 	if err != nil {
-		log.Printf("Error while executing %s: %s", operationName, err)
+		log.Printf("Error while executing %s (endpoint:%s): %s", operationName, p.name, err)
 		return err
 	}
 	s3SuccessCounter.WithLabelValues(operationName, p.name).Inc()
@@ -405,7 +406,7 @@ func (p *Probe) prepareDurabilityBucket() error {
 		}
 	}
 
-	log.Println("Preparing durability bucket")
+	log.Printf("Preparing durability bucket on %s", p.name)
 	probeBucketAttempt.WithLabelValues(p.name).Inc()
 	objectSuffix := "fake-item-"
 	objectSize := int64(p.durabilityItemSize)
@@ -437,7 +438,7 @@ func (p *Probe) prepareLatencyBucket() error {
 	if exists {
 		return nil
 	}
-	log.Println("Preparing latency bucket")
+	log.Printf("Preparing latency bucket on %s", p.name)
 	probeBucketAttempt.WithLabelValues(p.name).Inc()
 
 	err := p.endpoint.s3Client.MakeBucket(context.Background(), p.latencyBucketName, minio.MakeBucketOptions{})
@@ -452,7 +453,7 @@ func (p *Probe) prepareLatencyBucket() error {
 func (p *Probe) prepareGatewayBucket() error {
 	log.Printf("Checking if gateway buckets are present on %s", p.name)
 	if len(p.gatewayEndpoints) == 0 {
-		return errors.New("Couldn't find any gateway destinations")
+		return errors.New("couldn't find any gateway destinations")
 	}
 	for i := range p.gatewayEndpoints {
 		exists, errBucketExists := p.gatewayEndpoints[i].s3Client.BucketExists(context.Background(), p.gatewayBucketName)

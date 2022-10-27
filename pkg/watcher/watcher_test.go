@@ -3,11 +3,12 @@ package watcher
 import (
 	"errors"
 	"fmt"
-	"github.com/criteo/s3-probe/pkg/config"
-	probe2 "github.com/criteo/s3-probe/pkg/probe"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/criteo/s3-probe/pkg/config"
+	probe2 "github.com/criteo/s3-probe/pkg/probe"
 
 	"github.com/smartystreets/assertions/assert"
 	"github.com/smartystreets/assertions/should"

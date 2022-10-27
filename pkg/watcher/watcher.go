@@ -1,10 +1,11 @@
 package watcher
 
 import (
-	"github.com/criteo/s3-probe/pkg/config"
-	"github.com/criteo/s3-probe/pkg/probe"
 	"log"
 	"time"
+
+	"github.com/criteo/s3-probe/pkg/config"
+	"github.com/criteo/s3-probe/pkg/probe"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"

@@ -2,10 +2,11 @@ package probe
 
 import (
 	"context"
-	"github.com/criteo/s3-probe/pkg/config"
 	"log"
 	"testing"
 	"time"
+
+	"github.com/criteo/s3-probe/pkg/config"
 
 	minio "github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
