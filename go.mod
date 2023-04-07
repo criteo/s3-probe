@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/consul/api v1.10.1
 	github.com/minio/minio-go/v7 v7.0.13
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.11.0
+	github.com/prometheus/client_golang v1.11.1
 	github.com/prometheus/client_model v0.2.0
 	github.com/smartystreets/assertions v1.2.0
 )
