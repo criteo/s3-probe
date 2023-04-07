@@ -25,6 +25,7 @@ type Config struct {
 	DurabilityItemTotal       *int
 	DurabilityTimeout         *time.Duration
 	LatencyTimeout            *time.Duration
+	CleanupDelay              *time.Duration
 }
 
 // ParseConfig parse the configuration and create a Config struct
@@ -47,6 +48,7 @@ func ParseConfig() Config {
 		DurabilityItemSize:        flag.Int("durability-item-size", 1024*10, "Size of the item to insert into S3 for durability testing"),
 		LatencyItemSize:           flag.Int("latency-item-size", 1024*10, "Size of the item to insert into S3 for latency testing"),
 		DurabilityItemTotal:       flag.Int("item-total", 100000, "Total number of items to write into S3 for durability testing"),
+		CleanupDelay:              flag.Duration("cleanup-delay", 30*time.Second, "Delay before deleting objects created during probing"),
 	}
 
 	flag.Parse()
@@ -67,6 +69,7 @@ func GetTestConfig() Config {
 	interval := time.Duration(1)
 	durabilityTimeout := time.Duration(60_000_000_000)
 	latencyTimeout := time.Duration(5_000_000_000)
+	cleanupDelay := time.Duration(0)
 
 	return Config{
 		ConsulAddr:                &dummyValue,
@@ -84,6 +87,7 @@ func GetTestConfig() Config {
 		DurabilityItemTotal:       &durabilityItemTotal,
 		DurabilityTimeout:         &durabilityTimeout,
 		LatencyTimeout:            &latencyTimeout,
+		CleanupDelay:              &cleanupDelay,
 
 		AccessKey: &accessKey,
 		SecretKey: &secretKey,
