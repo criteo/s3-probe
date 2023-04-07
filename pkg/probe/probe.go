@@ -99,6 +99,7 @@ type Probe struct {
 	durabilityItemTotal       int
 	durabilityTimeout         time.Duration
 	latencyTimeout            time.Duration
+	cleanupDelay              time.Duration
 	gatewayEndpoints          []S3Endpoint
 	controlChan               chan bool
 }
@@ -133,6 +134,7 @@ func NewProbe(service S3Service, endpoint string, gatewayEndpoints []S3Endpoint,
 		durabilityItemTotal:       *cfg.DurabilityItemTotal,
 		durabilityTimeout:         *cfg.DurabilityTimeout,
 		latencyTimeout:            *cfg.LatencyTimeout,
+		cleanupDelay:              *cfg.CleanupDelay,
 		controlChan:               controlChan,
 		gatewayEndpoints:          gatewayEndpoints,
 	}, nil
@@ -246,9 +248,6 @@ func (p *Probe) performDurabilityChecks() error {
 }
 
 func (p *Probe) performLatencyChecks() error {
-	objectName, _ := randomHex(20)
-	objectSize := int64(p.latencyItemSize)
-
 	operation := func(ctx context.Context) error {
 		_, err := p.endpoint.s3Client.ListBuckets(ctx)
 		return err
@@ -257,7 +256,11 @@ func (p *Probe) performLatencyChecks() error {
 		return err
 	}
 
+	objectName, _ := randomHex(20)
+	objectSize := int64(p.latencyItemSize)
 	objectData, _ := randomObject(objectSize)
+	defer p.cleanTempObject(p.endpoint.s3Client, p.latencyBucketName, objectName)
+
 	operation = func(ctx context.Context) error {
 		_, err := p.endpoint.s3Client.PutObject(ctx, p.latencyBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
@@ -301,8 +304,12 @@ func (p *Probe) performGatewayChecks() error {
 	objectRandSuffix, _ := randomHex(20)
 	objectName := fmt.Sprintf("%s-%s", p.name, objectRandSuffix)
 	objectSize := int64(1024)
-
 	objectData, _ := randomObject(objectSize)
+
+	for i := range p.gatewayEndpoints {
+		defer p.cleanTempObject(p.gatewayEndpoints[i].s3Client, p.gatewayBucketName, objectName)
+	}
+
 	operation := func(ctx context.Context) error {
 		_, err := p.endpoint.s3Client.PutObject(ctx, p.gatewayBucketName, objectName, objectData, objectSize, minio.PutObjectOptions{})
 		return err
@@ -346,6 +353,14 @@ func (p *Probe) performGatewayChecks() error {
 	}
 
 	return nil
+}
+
+func (p *Probe) cleanTempObject(s3Client *minio.Client, bucketName string, objectName string) {
+	// purpose of the cleanupDelay is to let server side operations complete if
+	// timeout has been observe on probe side
+	time.Sleep(p.cleanupDelay)
+
+	_ = s3Client.RemoveObject(context.Background(), bucketName, objectName, minio.RemoveObjectOptions{})
 }
 
 func (p *Probe) mesureOperation(operationName string, operation func(ctx context.Context) error) error {
