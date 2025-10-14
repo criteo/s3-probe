@@ -144,22 +144,34 @@ func extractGatewayEndoints(serviceEntries []*consul_api.ServiceEntry, cfg *conf
 
 	for _, destination := range destinations {
 
-		endpointEntries, _, err := health.Service(destination.service, "", true, &consul_api.QueryOptions{Datacenter: destination.datacenter})
-		if err != nil {
-			log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destination.raw, destination.datacenter, destination.service, err)
-			return s3endpoints, err
+		if strings.HasPrefix(destination.service, "http") {
+			// A pure endpoint, not a consul service destination
+			minioClient, err := newMinioClientFromEndpoint(destination.service, *cfg.AccessKey, *cfg.SecretKey)
+			if err != nil {
+				log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destination.raw, destination.datacenter, destination.service, err)
+				return []S3Endpoint{}, err
+			}
+			s3endpoints = append(s3endpoints, S3Endpoint{Name: destination.service, s3Client: minioClient})
+		} else {
+			// legacy, a service consul definition
+			endpointEntries, _, err := health.Service(destination.service, "", true, &consul_api.QueryOptions{Datacenter: destination.datacenter})
+			if err != nil {
+				log.Printf("Consul query failed for %s (dc: %s, service: %s): %s", destination.raw, destination.datacenter, destination.service, err)
+				return s3endpoints, err
+			}
+			endpointName, err := getEndpointFromConsul(destination.service, endpointEntries)
+			if err != nil {
+				return s3endpoints, err
+			}
+			minioClient, err := newMinioClientFromEndpoint(endpointName, *cfg.AccessKey, *cfg.SecretKey)
+			if err != nil {
+				log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destination.raw, destination.datacenter, destination.service, err)
+				return []S3Endpoint{}, err
+			}
+			s3endpoints = append(s3endpoints, S3Endpoint{Name: endpointName, s3Client: minioClient})
+			log.Printf("Added gateway destination: %s", endpointName)
 		}
-		endpointName, err := getEndpointFromConsul(destination.service, endpointEntries)
-		if err != nil {
-			return s3endpoints, err
-		}
-		minioClient, err := newMinioClientFromEndpoint(endpointName, *cfg.AccessKey, *cfg.SecretKey)
-		if err != nil {
-			log.Printf("Could not create minio client for %s (dc: %s, service: %s) : %s", destination.raw, destination.datacenter, destination.service, err)
-			return []S3Endpoint{}, err
-		}
-		s3endpoints = append(s3endpoints, S3Endpoint{Name: endpointName, s3Client: minioClient})
-		log.Printf("Added gateway destination: %s", endpointName)
+
 	}
 	return s3endpoints, nil
 }
