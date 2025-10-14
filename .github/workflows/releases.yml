@@ -31,17 +31,19 @@ jobs:
     - name: Build
       run: make build
 
-    - name: Gzip binaries
+    - name: Package as .tar.gz
       run: |
-        mkdir -p dist
+        rm -rf dist && mkdir -p dist
+        # one .tar.gz per binary in ./bin
         for f in bin/*; do
           [ -f "$f" ] || continue
-          gzip -c "$f" > "dist/$(basename "$f").gz"
+          base="$(basename "$f")"
+          tar -C bin -czf "dist/${base}.tar.gz" "$base"
         done
 
-    - name: Release
+    - name: Create GitHub Release & upload assets
       uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        files: dist/*
+        files: dist/*.tar.gz
