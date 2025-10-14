@@ -192,7 +192,7 @@ func extractDestinations(serviceEntries []*consul_api.ServiceEntry) (destination
 
 	log.Printf("Processing gateway destinations: %s", rawDestinations)
 	rawDestinationList := strings.Split(rawDestinations, ";")
-	re := regexp.MustCompile("^(.*):(.*)$")
+	re := regexp.MustCompile("^([^:]+):(.*)$")
 
 	for i := range rawDestinationList {
 		match := re.FindStringSubmatch(rawDestinationList[i])
