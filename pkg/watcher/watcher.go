@@ -129,6 +129,11 @@ func (w *Watcher) getServices() []probe.S3Service {
 		results = append(results, s)
 	}
 
+	for name, endpoint := range w.cfg.StaticS3Endpoints {
+		s := probe.S3Service{Name: name, Endpoint: endpoint, Gateway: false, GatewayReadEnpoints: []probe.S3Endpoint{}}
+		results = append(results, s)
+	}
+
 	return results
 }
 

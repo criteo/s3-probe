@@ -74,9 +74,8 @@ func (cc *consulClientImpl) GetAllMatchingRegisteredServices() (map[string]bool,
 	results := map[string]bool{}
 	for serviceName := range services {
 		for i := range services[serviceName] {
-			isGateway := services[serviceName][i] == *cc.cfg.GatewayTag
-			if isGateway || services[serviceName][i] == *cc.cfg.Tag {
-				results[serviceName] = isGateway
+			if services[serviceName][i] == *cc.cfg.GatewayTag {
+				results[serviceName] = true
 				break
 			}
 		}

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 )
@@ -9,7 +11,7 @@ import (
 // Config contains the configuration of the probe
 type Config struct {
 	ConsulAddr                *string
-	Tag                       *string
+	StaticS3Endpoints         map[string]string
 	GatewayTag                *string
 	LatencyBucketName         *string
 	GatewayBucketName         *string
@@ -30,9 +32,11 @@ type Config struct {
 
 // ParseConfig parse the configuration and create a Config struct
 func ParseConfig() Config {
+
+	staticS3EndpointsJson := flag.String("static-s3-endpoints", "{}", "JSON map name -> endpoint of declarative S3 endpoints to monitor")
+
 	config := Config{
 		ConsulAddr:                flag.String("consul", "localhost:8500", "Consul server address"),
-		Tag:                       flag.String("tag", "s3", "Tag to search on consul"),
 		GatewayTag:                flag.String("gateway-tag", "s3-gateway", "Tag to search on consul"),
 		LatencyBucketName:         flag.String("latency-bucket", "monitoring-latency", "Bucket used for the latency monitoring probe (will read and write)"),
 		GatewayBucketName:         flag.String("gateway-bucket", "monitoring-gateway", "Bucket used for the gateway latency monitoring probe (will read and write)"),
@@ -52,6 +56,13 @@ func ParseConfig() Config {
 	}
 
 	flag.Parse()
+
+	err := json.Unmarshal([]byte(*staticS3EndpointsJson), &config.StaticS3Endpoints)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing -static-s3-endpoints: %v\n", err)
+		os.Exit(1)
+	}
+
 	return config
 }
 
@@ -73,7 +84,6 @@ func GetTestConfig() Config {
 
 	return Config{
 		ConsulAddr:                &dummyValue,
-		Tag:                       &dummyValue,
 		GatewayTag:                &dummyValue,
 		LatencyBucketName:         &latencyBucketName,
 		GatewayBucketName:         &latencyBucketName,
