@@ -31,11 +31,17 @@ jobs:
     - name: Build
       run: make build
 
+    - name: Gzip binaries
+      run: |
+        mkdir -p dist
+        for f in bin/*; do
+          [ -f "$f" ] || continue
+          gzip -c "$f" > "dist/$(basename "$f").gz"
+        done
+
     - name: Release
-      uses: goreleaser/goreleaser-action@v6
-      with:
-        distribution: goreleaser
-        version: latest
-        args: release --clean
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        files: dist/*
