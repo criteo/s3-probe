@@ -10,13 +10,13 @@ jobs:
     steps:
 
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v6
       with:
-        go-version: 1.16
+        go-version: "1.16"
       id: go
 
     - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+      uses: actions/checkout@v5
       with:
         ref: ${{ github.ref }}
 
@@ -42,7 +42,7 @@ jobs:
         done
 
     - name: Create GitHub Release & upload assets
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v3
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
