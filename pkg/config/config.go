@@ -36,7 +36,7 @@ func ParseConfig() Config {
 	staticS3EndpointsJson := flag.String("static-s3-endpoints", "{}", "JSON map name -> endpoint of declarative S3 endpoints to monitor")
 
 	config := Config{
-		ConsulAddr:                flag.String("consul", "localhost:8500", "Consul server address"),
+		ConsulAddr:                flag.String("consul", "", "Consul server address. When empty, falls back to the CONSUL_HTTP_ADDR env var, then to 127.0.0.1:8500"),
 		GatewayTag:                flag.String("gateway-tag", "s3-gateway", "Tag to search on consul"),
 		LatencyBucketName:         flag.String("latency-bucket", "monitoring-latency", "Bucket used for the latency monitoring probe (will read and write)"),
 		GatewayBucketName:         flag.String("gateway-bucket", "monitoring-gateway", "Bucket used for the gateway latency monitoring probe (will read and write)"),

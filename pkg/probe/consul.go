@@ -52,7 +52,11 @@ func (s *S3Service) Equals(other *S3Service) bool {
 // MakeConsulClient builds a new ConsulClient
 func MakeConsulClient(cfg *config.Config) (ConsulClient, error) {
 	defaultConfig := consul_api.DefaultConfig()
-	defaultConfig.Address = *cfg.ConsulAddr
+	// DefaultConfig() already honors CONSUL_HTTP_ADDR (falling back to 127.0.0.1:8500).
+	// Only override it when the -consul flag is explicitly provided.
+	if cfg.ConsulAddr != nil && *cfg.ConsulAddr != "" {
+		defaultConfig.Address = *cfg.ConsulAddr
+	}
 
 	client, err := consul_api.NewClient(defaultConfig)
 	if err != nil {
