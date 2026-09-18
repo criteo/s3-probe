@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ConsulClient is a wrapper around true consul client to ease mocking
+// ConsulClient is a wrapper around the true consul client to ease mocking
 type ConsulClient interface {
 	GetAllMatchingRegisteredServices() (map[string]bool, error)
 	GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error)
@@ -23,7 +23,7 @@ type consulClientImpl struct {
 	consulClient *consul_api.Client
 }
 
-// S3Service describe a S3 service and associated metadata
+// S3Service describes a S3 service and associated metadata
 type S3Service struct {
 	Name                string
 	Endpoint            string
@@ -31,7 +31,7 @@ type S3Service struct {
 	GatewayReadEnpoints []S3Endpoint
 }
 
-// Equals checks that to S3Service description are identical
+// Equals checks that two S3Service descriptions are identical
 func (s *S3Service) Equals(other *S3Service) bool {
 	if s.Name != other.Name ||
 		s.Endpoint != other.Endpoint ||
@@ -88,19 +88,19 @@ func (cc *consulClientImpl) GetAllMatchingRegisteredServices() (map[string]bool,
 	return results, nil
 }
 
-// getServiceEndPoint resolves the endpoint address of the given serviceName via consul
+// GetServiceEndPoints resolves the endpoint address of the given serviceName via consul
 func (cc *consulClientImpl) GetServiceEndPoints(serviceName string, isGateway bool) (string, []S3Endpoint, error) {
 	log.Printf("Fetching endpoints for service: %s", serviceName)
 	health := cc.consulClient.Health()
 	serviceEntries, _, err := health.Service(serviceName, "", true, nil)
 	if err != nil {
-		log.Printf("Fail to query health information for service %s from consul: %s\n", serviceName, err)
+		log.Printf("Failed to query health information for service %s from consul: %s\n", serviceName, err)
 		return "", []S3Endpoint{}, err
 	}
 
 	endpoint, err := getEndpointFromConsul(serviceName, serviceEntries)
 	if err != nil {
-		log.Printf("Fail to resolve service endpoint from consul service entries for service %s: %s\n", serviceName, err)
+		log.Printf("Failed to resolve service endpoint from consul service entries for service %s: %s\n", serviceName, err)
 		return "", []S3Endpoint{}, err
 	}
 

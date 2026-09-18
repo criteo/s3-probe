@@ -30,7 +30,7 @@ type Config struct {
 	CleanupDelay              *time.Duration
 }
 
-// ParseConfig parse the configuration and create a Config struct
+// ParseConfig parses the configuration and creates a Config struct
 func ParseConfig() Config {
 
 	staticS3EndpointsJson := flag.String("static-s3-endpoints", "{}", "JSON map name -> endpoint of declarative S3 endpoints to monitor")
@@ -41,12 +41,12 @@ func ParseConfig() Config {
 		LatencyBucketName:         flag.String("latency-bucket", "monitoring-latency", "Bucket used for the latency monitoring probe (will read and write)"),
 		GatewayBucketName:         flag.String("gateway-bucket", "monitoring-gateway", "Bucket used for the gateway latency monitoring probe (will read and write)"),
 		DurabilityBucketName:      flag.String("durability-bucket", "monitoring-durability", "Bucket used for the durability monitoring probe (will read and write)"),
-		Interval:                  flag.Duration("interval", 600*time.Second, "How often consul is polled to discover new S3 endoints"),
-		DurabilityTimeout:         flag.Duration("durablity-timeout", 60*time.Second, "Timeout duration of the durability check"),
+		Interval:                  flag.Duration("interval", 600*time.Second, "How often consul is polled to discover new S3 endpoints"),
+		DurabilityTimeout:         flag.Duration("durability-timeout", 60*time.Second, "Timeout duration of the durability check"),
 		LatencyTimeout:            flag.Duration("latency-timeout", 30*time.Second, "Timeout duration of the latency check"),
 		Addr:                      flag.String("listen-address", ":8080", "The address to listen on for HTTP requests."),
-		AccessKey:                 flag.String("s3-access-key", "", "User key of the S3 endpoint"),
-		SecretKey:                 flag.String("s3-secret-key", "", "Access key of the S3 endpoint"),
+		AccessKey:                 flag.String("s3-access-key", "", "Secret key of the S3 endpoint"),
+		SecretKey:                 flag.String("s3-secret-key", "", "Secret key of the S3 endpoint"),
 		ProbeRatePerMin:           flag.Int("probe-rate", 120, "Rate of probing per minute (how many checks are done in a minute)"),
 		DurabilityProbeRatePerMin: flag.Int("durability-probe-rate", 1, "Rate of probing per minute (how many checks are done in a minute)"),
 		DurabilityItemSize:        flag.Int("durability-item-size", 1024*10, "Size of the item to insert into S3 for durability testing"),

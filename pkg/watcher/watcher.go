@@ -41,8 +41,8 @@ func NewWatcher(cfg config.Config) Watcher {
 	}
 }
 
-// WatchPools poll consul services with specified tag and create
-// probe gorountines
+// WatchPools polls consul services with specified tag and creates
+// probe goroutines
 func (w *Watcher) WatchPools(interval time.Duration) {
 	for {
 		log.Printf("Discovering S3 endpoints (interval: %s)", interval)
@@ -112,7 +112,7 @@ func (w *Watcher) getServices() []probe.S3Service {
 	services, err := w.consulClient.GetAllMatchingRegisteredServices()
 	if err != nil {
 		serviceDiscoveryErrorCounter.WithLabelValues("N/A").Inc()
-		log.Printf("Fail to query all registered services from consul: %s\n", err)
+		log.Printf("Failed to query all registered services from consul: %s\n", err)
 		return []probe.S3Service{}
 	}
 
@@ -137,7 +137,7 @@ func (w *Watcher) getServices() []probe.S3Service {
 	return results
 }
 
-// getDiff return the elements from mainSlice that are not in subSlice or that have differences
+// getDiff returns the elements from mainSlice that are not in subSlice or that have differences
 func getSliceDiff(mainSlice []probe.S3Service, subSlice []probe.S3Service) []probe.S3Service {
 	mainIndex := make(map[string]*probe.S3Service)
 	var result []probe.S3Service
